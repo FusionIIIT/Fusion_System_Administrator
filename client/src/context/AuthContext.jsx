@@ -2,7 +2,7 @@ import React, {createContext, useState, useContext, useEffect} from "react";
 
 const AuthContext = createContext();
 
-const SESSION_TIMEOUT = 30*60*100;
+const SESSION_TIMEOUT = 30*60*1000;
 
 export const AuthProvider = ({children}) =>{
     const initialAuthState = Boolean(localStorage.getItem("isAuthenticated"));
@@ -27,8 +27,14 @@ export const AuthProvider = ({children}) =>{
           setIsAuthenticated(false);
         }
       };
+
+      const handleUnload = () => {
+        logout();
+      };
     
       window.addEventListener("storage", handleStorageChange);
+      window.addEventListener("beforeunload", handleUnload);
+
       
       const interval = setInterval(checkSession, 60000);
 
@@ -46,6 +52,7 @@ export const AuthProvider = ({children}) =>{
         document.removeEventListener("mousemove", resetSession);
         document.removeEventListener("keypress", resetSession);
         window.removeEventListener("storage", handleStorageChange);
+        window.removeEventListener("beforeunload", handleUnload);
       };
     }, []);
 
