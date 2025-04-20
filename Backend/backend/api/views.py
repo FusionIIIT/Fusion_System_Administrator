@@ -1,15 +1,16 @@
 import csv
 import datetime
 from django.http import HttpResponse
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.db.models.functions import Upper
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import status
-from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme
-from .serializers import GlobalExtraInfoSerializer, GlobalsDesignationSerializer, GlobalsModuleaccessSerializer, AuthUserSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer, GlobalsFacultySerializer, GlobalsDepartmentinfoSerializer, BatchSerializer, ProgrammeSerializer
+from rest_framework.views import APIView
+from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme, GlobalsFaculty, Staff
+from .serializers import GlobalExtraInfoSerializer, GlobalsDesignationSerializer, GlobalsModuleaccessSerializer, AuthUserSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer, GlobalsFacultySerializer, GlobalsDepartmentinfoSerializer, BatchSerializer, ProgrammeSerializer, StaffSerializer
 from io import StringIO
 from .helpers import create_password, send_email, mail_to_user, configure_password_mail, add_user_extra_info, add_user_designation_info, add_student_info
 from django.contrib.auth.hashers import make_password
@@ -659,3 +660,41 @@ def download_sample_csv(request):
         "dob", "address", "phone_no", "department"
     ])
     return response
+
+class UserListView(APIView):
+    def get(self, request):
+        user_type = request.GET.get('type')
+        serializer = None
+
+        if user_type == "student":
+            students = Student.objects.select_related('id__user', 'id__department', 'batch_id')
+            programme = request.GET.get("programme")
+            batch = request.GET.get("batch")
+            discipline = request.GET.get("discipline")
+
+            if programme:
+                students = students.filter(programme__iexact=programme)
+            if batch:
+                students = students.filter(batch=batch)
+            if discipline:
+                students = students.filter(batch_id__discipline__name__iexact=discipline)
+
+            serializer = StudentSerializer(students, many=True)
+
+        elif user_type == "faculty":
+            faculty = GlobalsFaculty.objects.select_related('id__user', 'id__department').prefetch_related('id__user__holds_designations__designation')
+            designation = request.GET.get("designation")
+
+            if designation:
+                faculty = faculty.filter(id__user__holds_designations__designation__name__iexact=designation).distinct()
+
+            serializer = GlobalsFacultySerializer(faculty, many=True)
+
+        elif user_type == "staff":
+            staff = Staff.objects.select_related("id__user", "id__department")
+            serializer = StaffSerializer(staff, many=True)
+
+        else:
+            return Response({"error": "Invalid or missing user type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.data)

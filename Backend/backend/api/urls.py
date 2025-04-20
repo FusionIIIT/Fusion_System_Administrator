@@ -23,4 +23,5 @@ urlpatterns = [
     path('users/mail-batch/', views.mail_to_whole_batch, name='mail-to-whole-batch'),
     path('update-globals-db/', update_global_db.update_globals_db, name='update_globals_db'),
     path('download-sample-csv/', views.download_sample_csv, name='download_sample_csv'),
+    path("users/", views.UserListView.as_view(), name='user-list'),
 ]
