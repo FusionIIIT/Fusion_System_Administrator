@@ -34,8 +34,6 @@ export const getAllDesignations = async (designationType) => {
 }
 
 export const getAllDepartments = async () => {
-    console.log(API_URL);
-    console.log("yoooooooooooooooooooooooooooooooooooooooooooo12121212");
     try {
         const response = await axios.get(API_URL + '/departments/');
         return response.data;

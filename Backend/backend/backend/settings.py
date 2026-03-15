@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-t6jw%_q8cd2528(#+=o+q33d)@#u2r+$#6kd^=fxy(90b62$*d
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['http://localhost:5173', 'localhost']
+ALLOWED_HOSTS = ['http://localhost:5173', 'localhost', '127.0.0.1']
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -75,10 +75,13 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
-    'http://127:0.0.1:5173',
+    'http://127.0.0.1:5173',
     'http://localhost:5174',
-    'http://127:0.0.1:5174',
+    'http://127.0.0.1:5174',
 ]
+
+# Allow all for development
+CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -102,14 +105,13 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
+# Using PostgreSQL for development
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'fusionlab',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
+        'USER': 'fusion_admin',
+        'PASSWORD': 'hello123',
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -117,15 +119,15 @@ DATABASES = {
 
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_HOST = env.str("EMAIL_HOST", default='smtp.gmail.com')
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
-EMAIL_HOST_USER = env("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
-EMAIL_TEST_USER = env("EMAIL_TEST_USER")
-EMAIL_TEST_MODE = env("EMAIL_TEST_MODE")
-EMAIL_TEST_COUNT = env("EMAIL_TEST_COUNT")
-EMAIL_TEST_ARRAY = env("EMAIL_TEST_ARRAY")
+EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default='test@iiitdmj.ac.in')
+EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default='testpassword')
+EMAIL_TEST_USER = env.str("EMAIL_TEST_USER", default='test@iiitdmj.ac.in')
+EMAIL_TEST_MODE = env.int("EMAIL_TEST_MODE", default=1)
+EMAIL_TEST_COUNT = env.int("EMAIL_TEST_COUNT", default=0)
+EMAIL_TEST_ARRAY = env.list("EMAIL_TEST_ARRAY", default=[])
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 

@@ -166,7 +166,7 @@ const StaffCreationPage = () => {
     const matches = useMediaQuery('(min-width: 768px)');
 
     return (
-        <Box maw={700} mx="auto" p="lg" shadow="sm" withBorder>
+        <Box maw={700} mx="auto" p="lg" shadow="sm" withborder>
             <Paper shadow="xl" radius="lg" p="xl">
                 <Flex
                     gap="md"
