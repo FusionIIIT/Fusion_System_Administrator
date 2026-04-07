@@ -1,77 +1,94 @@
-import React, {createContext, useState, useContext, useEffect} from "react";
+import { createContext, useContext, useState, useEffect } from 'react';
+import { login as loginApi, logout as logoutApi, getCurrentUser } from '../services/authApi';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-const SESSION_TIMEOUT = 30*60*1000;
-
-export const AuthProvider = ({children}) =>{
-    const initialAuthState = Boolean(localStorage.getItem("isAuthenticated"));
-    const [isAuthenticated, setIsAuthenticated] = useState(initialAuthState);
-    
-    useEffect(()=>{
-      const checkSession = () =>{
-        const sessionStart = localStorage.getItem("sessionStart");
-        if(sessionStart){
-          const sessionAge = Date.now() - parseInt(sessionStart);
-          if(sessionAge > SESSION_TIMEOUT){
-            logout();
-          }
-          else{
-            setIsAuthenticated(true);
-          }
-        }
-      };
-
-      const handleStorageChange = (event) => {
-        if (event.key === "isAuthenticated" && event.newValue === null) {
-          setIsAuthenticated(false);
-        }
-      };
-
-      const handleUnload = () => {
-        logout();
-      };
-    
-      window.addEventListener("storage", handleStorageChange);
-      // window.addEventListener("beforeunload", handleUnload);
-
-      
-      const interval = setInterval(checkSession, 60000);
-
-      const resetSession =()=>{
-        localStorage.setItem("sessionStart", Date.now().toString());
-      };
-
-      document.addEventListener("click", resetSession);
-      document.addEventListener("mousemove", resetSession);
-      document.addEventListener("keypress", resetSession);
-      
-      return ()=> {
-        clearInterval(interval);
-        document.removeEventListener("click", resetSession);
-        document.removeEventListener("mousemove", resetSession);
-        document.removeEventListener("keypress", resetSession);
-        window.removeEventListener("storage", handleStorageChange);
-        // window.removeEventListener("beforeunload", handleUnload);
-      };
-    }, []);
-
-    const login = () => {
-        setIsAuthenticated(true);
-        localStorage.setItem("isAuthenticated", "true");
-        localStorage.setItem("sessionStart", Date.now().toString());
-      };
-
-      const logout = () => {
-        setIsAuthenticated(false);
-        localStorage.clear();
-      };
-
-    return (
-        <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
-        {children}
-      </AuthContext.Provider>
-    );
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+  return context;
 };
 
-export const useAuth = () =>useContext(AuthContext);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Check if user is authenticated on mount
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('accessToken');
+      const storedUser = localStorage.getItem('user');
+
+      if (token && storedUser) {
+        try {
+          // Verify token is still valid by fetching user
+          console.log('Initializing auth - validating token...');
+          const userData = await getCurrentUser();
+          setUser(userData);
+          console.log('Auth initialized successfully for:', userData.username);
+        } catch (error) {
+          console.warn('Token validation failed, clearing storage:', error.message);
+          // Token invalid, clear storage
+          localStorage.clear();
+          setUser(null);
+        }
+      } else {
+        console.log('No existing auth found');
+      }
+      setLoading(false);
+    };
+
+    initAuth();
+  }, []);
+
+  const login = async (username, password) => {
+    try {
+      console.log('Attempting login for:', username);
+      const response = await loginApi({ username, password });
+      
+      console.log('Login successful, user:', response.user.username);
+      console.log('Roles:', response.user.roles);
+      
+      // Save tokens and user data
+      localStorage.setItem('accessToken', response.access);
+      localStorage.setItem('refreshToken', response.refresh);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      
+      setUser(response.user);
+      return response.user;
+    } catch (error) {
+      console.error('Login failed:', error.response?.data || error.message);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      console.log('Logging out user:', user?.username);
+      await logoutApi();
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // Always clear local storage
+      console.log('Clearing auth data');
+      localStorage.clear();
+      setUser(null);
+    }
+  };
+
+  const value = {
+    user,
+    loading,
+    login,
+    logout,
+    isAuthenticated: !!user,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
+};

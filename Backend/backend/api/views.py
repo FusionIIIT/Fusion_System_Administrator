@@ -6,16 +6,58 @@ from django.db.models.functions import Upper
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework import status
 from rest_framework.views import APIView
-from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme, GlobalsFaculty, Staff
-from .serializers import GlobalExtraInfoSerializer, GlobalsDesignationSerializer, GlobalsModuleaccessSerializer, AuthUserSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer, GlobalsFacultySerializer, GlobalsDepartmentinfoSerializer, BatchSerializer, ProgrammeSerializer, StaffSerializer, ViewStudentsWithFiltersSerializer, ViewStaffWithFiltersSerializer, ViewFacultyWithFiltersSerializer
+from rest_framework.permissions import IsAuthenticated
+from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme, GlobalsFaculty, Staff, AuditLog
+from .serializers import GlobalExtraInfoSerializer, GlobalsDesignationSerializer, GlobalsModuleaccessSerializer, AuthUserSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer, GlobalsFacultySerializer, GlobalsDepartmentinfoSerializer, BatchSerializer, ProgrammeSerializer, StaffSerializer, ViewStudentsWithFiltersSerializer, ViewStaffWithFiltersSerializer, ViewFacultyWithFiltersSerializer, AuditLogSerializer
 from io import StringIO
 from .helpers import create_password, send_email, mail_to_user, configure_password_mail, add_user_extra_info, add_user_designation_info, add_student_info
 from django.contrib.auth.hashers import make_password
-from backend.settings import EMAIL_TEST_ARRAY
+from django.utils import timezone
 from django.conf import settings
+from .audit import audit_log, create_audit_log, get_client_ip, log_failed_login, get_user_agent
+
+
+# Role conflict rules definition
+# Format: (role_name, [conflicting_role_names])
+ROLE_CONFLICT_RULES = {
+    'director': ['dean', 'hod'],  # Director cannot also be Dean or HOD
+    'dean': ['director', 'hod'],  # Dean cannot also be Director or HOD
+    'hod': ['director', 'dean'],  # HOD cannot also be Director or Dean
+    # Add more conflict rules as needed
+}
+
+
+def check_role_conflicts(user_id, new_designation_id):
+    """
+    Check if assigning a new role to a user conflicts with existing roles.
+    Returns a list of conflicting role names, or empty list if no conflicts.
+    """
+    try:
+        new_designation = GlobalsDesignation.objects.get(id=new_designation_id)
+        user_roles = GlobalsHoldsdesignation.objects.filter(user_id=user_id).select_related('designation')
+        
+        existing_role_names = [entry.designation.name for entry in user_roles]
+        conflicting_roles = []
+        
+        # Check if new role conflicts with any existing role
+        if new_designation.name in ROLE_CONFLICT_RULES:
+            for conflicting_role in ROLE_CONFLICT_RULES[new_designation.name]:
+                if conflicting_role in existing_role_names:
+                    conflicting_roles.append(conflicting_role)
+        
+        # Check if any existing role conflicts with the new role
+        for existing_role in existing_role_names:
+            if existing_role in ROLE_CONFLICT_RULES:
+                if new_designation.name in ROLE_CONFLICT_RULES[existing_role]:
+                    if new_designation.name not in conflicting_roles:
+                        conflicting_roles.append(new_designation.name)
+        
+        return conflicting_roles
+    except GlobalsDesignation.DoesNotExist:
+        return []
 
 
 @api_view(['GET'])
@@ -67,6 +109,8 @@ def get_user_role_by_username(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='UPDATE_USER_ROLES', model_name='GlobalsHoldsdesignation')
 def update_user_roles(request):
     username = request.data.get('username')
     roles_to_add = request.data.get('roles')
@@ -90,6 +134,36 @@ def update_user_roles(request):
 
     print("Processed roles_to_add:", processed_roles_to_add)
 
+    # Validate roles before assignment
+    for role_name in processed_roles_to_add:
+        if role_name not in existing_role_names:
+            try:
+                designation = GlobalsDesignation.objects.get(name=role_name)
+                
+                # Check singular role constraint
+                if designation.is_singular:
+                    other_users_with_role = GlobalsHoldsdesignation.objects.filter(
+                        designation=designation
+                    ).exclude(user=user)
+                    
+                    if other_users_with_role.exists():
+                        other_user = other_users_with_role.first().user
+                        return Response({
+                            "error": f"Role '{role_name}' is a singular role and can only be assigned to one user at a time.",
+                            "current_holder": other_user.username
+                        }, status=status.HTTP_409_CONFLICT)
+                
+                # Check role conflicts
+                conflicts = check_role_conflicts(user.id, designation.id)
+                if conflicts:
+                    return Response({
+                        "error": f"Role '{role_name}' conflicts with existing roles: {', '.join(conflicts)}",
+                        "conflicting_roles": conflicts
+                    }, status=status.HTTP_409_CONFLICT)
+                    
+            except GlobalsDesignation.DoesNotExist:
+                return Response({"error": f"Role '{role_name}' does not exist."}, status=status.HTTP_404_NOT_FOUND)
+
     roles_to_remove = existing_role_names - processed_roles_to_add
 
     GlobalsHoldsdesignation.objects.filter(user=user, designation__name__in=roles_to_remove).delete()
@@ -97,11 +171,29 @@ def update_user_roles(request):
     for role_name in processed_roles_to_add:
         if role_name not in existing_role_names:
             designation = get_object_or_404(GlobalsDesignation, name=role_name)
+            
+            # Get optional start_date and end_date from request
+            start_date = request.data.get('start_date')
+            end_date = request.data.get('end_date')
+            
+            # Validate dates
+            if start_date and end_date:
+                from datetime import datetime
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+                
+                if end_dt <= start_dt:
+                    return Response({
+                        "error": "End date must be after start date."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
             GlobalsHoldsdesignation.objects.create(
                 held_at=timezone.now(),
                 designation=designation,
                 user=user,
-                working=user
+                working=user,
+                start_date=start_date if start_date else None,
+                end_date=end_date if end_date else None
             )
 
     return Response({"message": "User roles updated successfully."}, status=status.HTTP_200_OK)
@@ -121,6 +213,8 @@ def get_category_designations(request):
     return Response(serializer.data)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='CREATE_ROLE', model_name='GlobalsDesignation')
 def add_designation(request):
     serializer = GlobalsDesignationSerializer(data=request.data)
     if serializer.is_valid():
@@ -159,6 +253,8 @@ def add_designation(request):
         return Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
     
 @api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='UPDATE_ROLE', model_name='GlobalsDesignation')
 def update_designation(request):
     name = request.data.get('name')
     
@@ -179,6 +275,8 @@ def update_designation(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='RESET_PASSWORD', model_name='AuthUser')
 def reset_password(request):
     user_name = request.data.get('username')
     try:
@@ -220,6 +318,7 @@ def get_module_access(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
     
 @api_view(['PUT'])
+@audit_log(action='MODIFY_MODULE_ACCESS', model_name='GlobalsModuleaccess')
 def modify_moduleaccess(request):
     role_name = request.data.get('designation')
     
@@ -240,6 +339,8 @@ def modify_moduleaccess(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='CREATE_STUDENT', model_name='AuthUser')
 def add_individual_student(request):
     required_fields = ["username", "first_name", "last_name", "sex", "category", "father_name", "mother_name", "batch", "programme"]
     data = request.data
@@ -346,6 +447,8 @@ def add_individual_student(request):
     return Response(response_data, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='CREATE_STAFF', model_name='AuthUser')
 def add_individual_staff(request):
     required_fields = ["username", "first_name", "last_name", "sex", "designation"]
     data = request.data
@@ -440,6 +543,8 @@ def add_individual_staff(request):
     }, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='CREATE_FACULTY', model_name='AuthUser')
 def add_individual_faculty(request):
     required_fields = ["username", "first_name", "last_name", "sex", "designation"]
     data = request.data
@@ -534,6 +639,8 @@ def add_individual_faculty(request):
     }, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='BULK_IMPORT_USERS', model_name='AuthUser')
 def bulk_import_users(request):
     # CSV file headers:
     # 1 username
@@ -578,7 +685,6 @@ def bulk_import_users(request):
                 'is_staff': False,
                 'is_superuser': False,
                 'is_active': True,
-                'date_joined': datetime.datetime.now().strftime("%Y-%m-%d"),
             }
             serializer = AuthUserSerializer(data=user_data)
             user = None
@@ -718,3 +824,391 @@ class UserListView(APIView):
             return Response({"error": "Invalid or missing user type."}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='ARCHIVE_USER', model_name='AuthUser')
+def archive_user(request, username):
+    """
+    Archive a user account (deactivate account).
+    Note: Since this uses an existing database table, we use is_active flag.
+    """
+    try:
+        user = get_object_or_404(AuthUser, username=username)
+
+        # Check if user is already archived (inactive)
+        if not user.is_active:
+            return Response({
+                "error": "User is already archived (inactive)"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check 30-day minimum period
+        if user.date_joined:
+            days_since_joined = (timezone.now() - user.date_joined).days
+            if days_since_joined < 30:
+                return Response({
+                    "error": f"User must be at least 30 days old to archive. Current age: {days_since_joined} days"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Archive the user (deactivate)
+        user.is_active = False
+        user.save()
+
+        create_audit_log(
+            user=request.user,
+            action='ARCHIVE_USER',
+            model_name='AuthUser',
+            object_id=str(user.id),
+            description=f"User {user.username} archived (deactivated) by {request.user.username}",
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
+            status='SUCCESS'
+        )
+
+        return Response({
+            "message": f"User {user.username} archived successfully"
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({
+            "error": f"Failed to archive user: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@audit_log(action='RESTORE_USER', model_name='AuthUser')
+def restore_user(request, username):
+    """
+    Restore an archived user account (reactivate account).
+    """
+    try:
+        user = get_object_or_404(AuthUser, username=username)
+
+        # Check if user is active (not archived)
+        if user.is_active:
+            return Response({
+                "error": "User is not archived (already active)"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Restore the user (activate)
+        user.is_active = True
+        user.save()
+
+        create_audit_log(
+            user=request.user,
+            action='RESTORE_USER',
+            model_name='AuthUser',
+            object_id=str(user.id),
+            description=f"User {user.username} restored (reactivated) by {request.user.username}",
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
+            status='SUCCESS'
+        )
+
+        return Response({
+            "message": f"User {user.username} restored successfully"
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({
+            "error": f"Failed to restore user: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_audit_logs(request):
+    """
+    Retrieve audit logs with filtering support.
+    Query params:
+    - start_date: Filter logs from this date (YYYY-MM-DD)
+    - end_date: Filter logs until this date (YYYY-MM-DD)
+    - user: Filter by username
+    - action: Filter by action type
+    - status: Filter by status (SUCCESS/FAILED)
+    - page: Page number (default 1)
+    - page_size: Number of results per page (default 50, max 200)
+    """
+    # Start with all logs
+    logs = AuditLog.objects.all()
+    
+    # Apply filters
+    start_date = request.query_params.get('start_date')
+    if start_date:
+        try:
+            from datetime import datetime
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            logs = logs.filter(timestamp__gte=start_dt)
+        except ValueError:
+            return Response({"error": "Invalid start_date format. Use YYYY-MM-DD"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    end_date = request.query_params.get('end_date')
+    if end_date:
+        try:
+            from datetime import datetime, timedelta
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+            logs = logs.filter(timestamp__lt=end_dt)
+        except ValueError:
+            return Response({"error": "Invalid end_date format. Use YYYY-MM-DD"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    username = request.query_params.get('user')
+    if username:
+        logs = logs.filter(user__username__icontains=username)
+    
+    action = request.query_params.get('action')
+    if action:
+        logs = logs.filter(action__icontains=action)
+    
+    status_filter = request.query_params.get('status')
+    if status_filter:
+        logs = logs.filter(status=status_filter.upper())
+    
+    # Pagination
+    try:
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 50))
+        page_size = min(page_size, 200)  # Max 200 per page
+    except ValueError:
+        return Response({"error": "Invalid page or page_size parameter"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    
+    # Get total count and paginated results
+    total_count = logs.count()
+    logs = logs[start_idx:end_idx]
+    
+    serializer = AuditLogSerializer(logs, many=True)
+    
+    return Response({
+        'count': total_count,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': (total_count + page_size - 1) // page_size,
+        'results': serializer.data
+    }, status=status.HTTP_200_OK)
+
+
+# ==================== AUTHENTICATION VIEWS ====================
+
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
+from django.contrib.auth.hashers import check_password
+from django.utils import timezone
+from datetime import timedelta, datetime as dt
+from backend.settings import MAX_FAILED_LOGIN_ATTEMPTS, FAILED_LOGIN_ATTEMPT_DURATION
+
+
+@api_view(['POST'])
+def login_view(request):
+    """
+    Authenticate user and return JWT tokens.
+    Accepts username OR email + password.
+    """
+    username_or_email = request.data.get('username')
+    password = request.data.get('password')
+    
+    if not username_or_email or not password:
+        return Response(
+            {"error": "Username/email and password are required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Try to find user by username or email
+        if '@' in username_or_email:
+            user = AuthUser.objects.get(email__iexact=username_or_email)
+            print(f"[LOGIN] Found user by email: {user.username}")
+        else:
+            user = AuthUser.objects.get(username__iexact=username_or_email)
+            print(f"[LOGIN] Found user by username: {user.username}")
+
+        # Check for account lockout due to failed login attempts
+        from backend.settings import LOGIN_LOCKOUT_ENABLED, MAX_FAILED_LOGIN_ATTEMPTS, FAILED_LOGIN_ATTEMPT_DURATION
+        if LOGIN_LOCKOUT_ENABLED:
+            lockout_window = timezone.now() - timedelta(seconds=FAILED_LOGIN_ATTEMPT_DURATION)
+            recent_failures = AuditLog.objects.filter(
+                action='FAILED_LOGIN',
+                description__contains=username_or_email,
+                timestamp__gte=lockout_window
+            ).count()
+
+            if recent_failures >= MAX_FAILED_LOGIN_ATTEMPTS:
+                print(f"[LOGIN] Account locked for {username_or_email} due to {recent_failures} failed attempts")
+                return Response({
+                    "error": f"Account locked due to multiple failed login attempts. Please try again after {FAILED_LOGIN_ATTEMPT_DURATION // 60} minutes."
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    except AuthUser.DoesNotExist:
+        print(f"[LOGIN] User not found: {username_or_email}")
+        # Log failed login attempt
+        try:
+            log_failed_login(
+                username_or_email=username_or_email,
+                reason='User does not exist',
+                ip_address=get_client_ip(request),
+                user_agent=get_user_agent(request)
+            )
+        except Exception as e:
+            print(f"[ERROR] Failed to log failed login: {e}")
+        return Response(
+            {"error": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    # Check password
+    if not check_password(password, user.password):
+        print(f"[LOGIN] Invalid password for user: {user.username}")
+        # Log failed login attempt
+        try:
+            log_failed_login(
+                username_or_email=username_or_email,
+                reason='Invalid password',
+                ip_address=get_client_ip(request),
+                user_agent=get_user_agent(request)
+            )
+        except Exception as e:
+            print(f"[ERROR] Failed to log failed login: {e}")
+        return Response(
+            {"error": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    if not user.is_active:
+        print(f"[LOGIN] Account disabled for user: {user.username}")
+        # Log failed login attempt
+        try:
+            log_failed_login(
+                username_or_email=username_or_email,
+                reason='Account is disabled',
+                ip_address=get_client_ip(request),
+                user_agent=get_user_agent(request)
+            )
+        except Exception as e:
+            print(f"[ERROR] Failed to log failed login: {e}")
+        return Response(
+            {"error": "Account is disabled"},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Generate tokens
+    try:
+        refresh = RefreshToken.for_user(user)
+        user.last_login = timezone.now()
+        user.save()
+        
+        user_roles = GlobalsHoldsdesignation.objects.filter(user=user).select_related('designation')
+        roles = [entry.designation.name for entry in user_roles]
+        
+        print(f"[LOGIN] Successful login for: {user.username}, roles: {roles}")
+        
+        create_audit_log(
+            user=user,
+            action='USER_LOGIN',
+            model_name='AuthUser',
+            object_id=str(user.id),
+            description=f"User {user.username} logged in successfully",
+            ip_address=get_client_ip(request),
+            status='SUCCESS'
+        )
+        
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'roles': roles,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser
+            }
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        print(f"[LOGIN] Error generating tokens for {user.username}: {str(e)}")
+        return Response(
+            {"error": "Failed to generate authentication tokens", "detail": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """Custom token refresh that returns user data"""
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        
+        if response.status_code == 200:
+            try:
+                refresh = RefreshToken(request.data.get('refresh'))
+                user_id = refresh['user_id']
+                user = AuthUser.objects.get(id=user_id)
+                
+                user_roles = GlobalsHoldsdesignation.objects.filter(user=user).select_related('designation')
+                roles = [entry.designation.name for entry in user_roles]
+                
+                response.data['user'] = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'roles': roles,
+                    'is_staff': user.is_staff,
+                }
+            except Exception as e:
+                print(f"Error getting user data: {e}")
+        
+        return response
+
+
+@api_view(['POST'])
+def logout_view(request):
+    """Log out user and record audit trail"""
+    user = request.user
+    
+    if user.is_authenticated:
+        create_audit_log(
+            user=user,
+            action='USER_LOGOUT',
+            model_name='AuthUser',
+            object_id=str(user.id),
+            description=f"User {user.username} logged out",
+            ip_address=get_client_ip(request),
+            status='SUCCESS'
+        )
+        
+        return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+    
+    return Response({"error": "Not authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_current_user(request):
+    """Get current authenticated user's information"""
+    user = request.user
+    
+    try:
+        user_roles = GlobalsHoldsdesignation.objects.filter(user=user).select_related('designation')
+        roles = [entry.designation.name for entry in user_roles]
+        
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'roles': roles,
+            'is_staff': user.is_staff,
+            'is_superuser': user.is_superuser,
+            'last_login': user.last_login
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            'error': 'Failed to fetch user information',
+            'detail': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

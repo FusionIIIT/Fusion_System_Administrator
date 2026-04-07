@@ -6,19 +6,52 @@
 #   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
 # Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 import datetime
 
-class AuthUser(models.Model):
+class AuthUserManager(BaseUserManager):
+    def create_user(self, username, email, password=None, **extra_fields):
+        if not username:
+            raise ValueError('The Username field must be set')
+        email = self.normalize_email(email)
+        user = self.model(username=username, email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, username, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+        return self.create_user(username, email, password, **extra_fields)
+
+class AuthUser(AbstractBaseUser):
+    id = models.AutoField(primary_key=True)
     password = models.CharField(max_length=128)
     last_login = models.DateTimeField(blank=True, null=True)
-    is_superuser = models.BooleanField()
+    is_superuser = models.BooleanField(default=False)
     username = models.CharField(unique=True, max_length=150)
-    first_name = models.CharField(max_length=150)
-    last_name = models.CharField(max_length=150)
-    email = models.CharField(max_length=254)
-    is_staff = models.BooleanField()
-    is_active = models.BooleanField()
-    date_joined = models.DateTimeField()
+    first_name = models.CharField(max_length=150, blank=True, default='')
+    last_name = models.CharField(max_length=150, blank=True, default='')
+    email = models.CharField(max_length=254, blank=True, default='')
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    date_joined = models.DateTimeField(auto_now_add=True)
+
+    objects = AuthUserManager()
+
+    USERNAME_FIELD = 'username'
+    EMAIL_FIELD = 'email'
+    REQUIRED_FIELDS = ['email']
+
+    def __str__(self):
+        return self.username
+
+    def has_perm(self, perm, obj=None):
+        return True
+
+    def has_module_perms(self, app_label):
+        return True
 
     class Meta:
         managed = False
@@ -97,7 +130,9 @@ class GlobalsDesignation(models.Model):
     type = models.CharField(max_length=30)
     basic = models.BooleanField(default=False, null=False, blank=False)
     category = models.CharField(max_length=20, null=True, blank=True)
-    dept_if_not_basic = models.ForeignKey(GlobalsDepartmentinfo, on_delete=models.CASCADE, blank=True, null=True)    
+    dept_if_not_basic = models.ForeignKey(GlobalsDepartmentinfo, on_delete=models.CASCADE, blank=True, null=True)
+    is_singular = models.BooleanField(default=False, help_text="If True, only one user can hold this role at a time")
+    
     class Meta:
         managed = False
         db_table = 'globals_designation'
@@ -135,6 +170,8 @@ class Staff(models.Model):
 
 class GlobalsHoldsdesignation(models.Model):
     held_at = models.DateTimeField(auto_now=True)
+    start_date = models.DateField(null=True, blank=True, help_text="Role assignment start date (optional)")
+    end_date = models.DateField(null=True, blank=True, help_text="Role assignment end date (optional)")
     designation = models.ForeignKey(GlobalsDesignation, related_name='designees', on_delete=models.CASCADE)
     user = models.ForeignKey(AuthUser, related_name='holds_designations', on_delete=models.CASCADE)
     working = models.ForeignKey(AuthUser, related_name='current_designation', on_delete=models.CASCADE)
@@ -206,3 +243,31 @@ class GlobalsFaculty(models.Model):
     class Meta:
         managed = False
         db_table = 'globals_faculty'
+
+
+class AuditLog(models.Model):
+    id = models.AutoField(primary_key=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(AuthUser, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=100)  # e.g., 'CREATE_USER', 'UPDATE_ROLE', 'ARCHIVE_USER'
+    model_name = models.CharField(max_length=100, blank=True, null=True)  # e.g., 'AuthUser', 'GlobalsDesignation'
+    object_id = models.CharField(max_length=100, blank=True, null=True)
+    description = models.TextField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True, null=True)  # Track browser/client
+    reason = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, default='SUCCESS')  # 'SUCCESS' or 'FAILED'
+
+    class Meta:
+        managed = True
+        db_table = 'audit_log'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['action', '-timestamp']),
+            models.Index(fields=['status', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.timestamp} - {self.user.username if self.user else 'Unknown'} - {self.action}"

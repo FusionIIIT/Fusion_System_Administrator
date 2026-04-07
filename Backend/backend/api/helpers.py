@@ -150,7 +150,53 @@ def convert_to_iso(date_str):
 
 def add_user_extra_info(row,user):
     department_name = row[13] if row[13] else 'CSE'
-    department = GlobalsDepartmentinfo.objects.get(name=department_name).id
+
+    # Department name mapping - handles various formats
+    dept_mapping = {
+        # Full names to abbreviations
+        'Computer Science': 'CSE',
+        'Computer Science & Engineering': 'CSE',
+        'Information Technology': 'CSE',
+        'Mechanical': 'ME',
+        'Mechanical Engineering': 'ME',
+        'Electronics': 'ECE',
+        'Electronics & Communication': 'ECE',
+        'Natural Science': 'SM',
+        'Mechatronics': 'SM',
+        'Data Science': 'CSE',
+        'Design': 'Design',  # For B.Des students
+        # Already abbreviations - keep as is
+        'CSE': 'CSE',
+        'ECE': 'ECE',
+        'ME': 'ME',
+        'SM': 'SM',
+        'MT': 'MT',
+    }
+
+    # Try exact match first
+    try:
+        department = GlobalsDepartmentinfo.objects.get(name=department_name).id
+    except GlobalsDepartmentinfo.DoesNotExist:
+        # Try mapping
+        mapped_name = dept_mapping.get(department_name, department_name)
+        try:
+            dept_obj = GlobalsDepartmentinfo.objects.get(name=mapped_name)
+            department = dept_obj.id
+            print(f"[INFO] Mapped department '{department_name}' to '{mapped_name}'")
+        except GlobalsDepartmentinfo.DoesNotExist:
+            # Default to CSE if not found
+            try:
+                department = GlobalsDepartmentinfo.objects.get(name='CSE').id
+                print(f"[WARNING] Department '{department_name}' not found, using CSE")
+            except GlobalsDepartmentinfo.DoesNotExist:
+                # Use first available department
+                first_dept = GlobalsDepartmentinfo.objects.first()
+                if first_dept:
+                    department = first_dept.id
+                    print(f"[WARNING] Using first available department: {first_dept.name}")
+                else:
+                    raise Exception("No departments found in database")
+
     extra_info_data = {
         'id': row[0].upper(),
         'title': row[9].capitalize() if row[9] else 'Mr.' if row[3] and row[3][0].upper() == 'M' else 'Ms.',
@@ -169,6 +215,8 @@ def add_user_extra_info(row,user):
     extra_info_serializer = GlobalExtraInfoSerializer(data=extra_info_data)
     if extra_info_serializer.is_valid():
         return extra_info_serializer
+    else:
+        print(f"[ERROR] ExtraInfo serializer errors: {extra_info_serializer.errors}")
     return None
 
 def add_user_designation_info(user_id, designation='student'):

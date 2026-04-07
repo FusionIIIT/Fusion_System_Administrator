@@ -1,8 +1,16 @@
 from django.urls import path
 from . import views
 from . import update_global_db
+from .views import login_view, logout_view, get_current_user, CustomTokenRefreshView
 
 urlpatterns = [
+    # Authentication endpoints
+    path('auth/login/', login_view, name='login'),
+    path('auth/logout/', logout_view, name='logout'),
+    path('auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('auth/me/', get_current_user, name='current_user'),
+    
+    # Existing endpoints
     path('departments/', views.get_all_departments ,name='get_all_departments'),
     path('batches/', views.get_all_batches ,name='get_all_batches'),
     path('programmes/', views.get_all_programmes ,name='get_all_programmes'),
@@ -24,4 +32,7 @@ urlpatterns = [
     path('update-globals-db/', update_global_db.update_globals_db, name='update_globals_db'),
     path('download-sample-csv/', views.download_sample_csv, name='download_sample_csv'),
     path("users/", views.UserListView.as_view(), name='user-list'),
+    path('audit-logs/', views.get_audit_logs, name='get_audit_logs'),
+    path('users/<str:username>/archive/', views.archive_user, name='archive_user'),
+    path('users/<str:username>/restore/', views.restore_user, name='restore_user'),
 ]

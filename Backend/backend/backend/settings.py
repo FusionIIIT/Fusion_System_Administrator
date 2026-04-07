@@ -30,12 +30,16 @@ SECRET_KEY = 'django-insecure-t6jw%_q8cd2528(#+=o+q33d)@#u2r+$#6kd^=fxy(90b62$*d
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['http://localhost:5173', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['http://localhost:5173', 'localhost', '127.0.0.1', 'testserver', '*']
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    'localhost',
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
+
+CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_METHODS = [
     "GET",
@@ -43,6 +47,19 @@ CORS_ALLOW_METHODS = [
     "PUT",
     "PATCH",
     "DELETE",
+    "OPTIONS",
+]
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 
@@ -58,6 +75,7 @@ INSTALLED_APPS = [
     'api',
     'rest_framework',
     'rest_framework.authtoken',  
+    'rest_framework_simplejwt',
     'corsheaders',
 ]
 
@@ -85,6 +103,9 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'backend.urls'
 
+# Custom User Model
+AUTH_USER_MODEL = 'api.AuthUser'
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -105,12 +126,12 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 
 # Database
-# Using PostgreSQL for development
+# Using PostgreSQL for production data
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'fusionlab',
-        'USER': 'fusion_admin',
+        'USER': 'postgres',
         'PASSWORD': 'hello123',
         'HOST': 'localhost',
         'PORT': '5432',
@@ -164,7 +185,42 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Session timeout configuration (30 minutes for admin users)
+SESSION_COOKIE_AGE = 1800  # 30 minutes in seconds
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# Failed login lockout settings
+MAX_FAILED_LOGIN_ATTEMPTS = 5
+FAILED_LOGIN_ATTEMPT_DURATION = 300  # 5 minutes in seconds
+LOGIN_LOCKOUT_ENABLED = True
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Django REST Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',
+    ),
+}
+
+# JWT Configuration
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+}
