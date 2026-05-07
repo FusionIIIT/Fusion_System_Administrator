@@ -17,28 +17,43 @@ class BaseModuleTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         """Create base test data for all tests"""
+        import random
+        import string
+
+        # Generate unique suffix for test data to avoid conflicts
+        suffix = ''.join(random.choices(string.ascii_lowercase, k=6))
+
         # Create admin user
-        cls.admin_user = User.objects.create_user(
-            username='testadmin',
-            email='admin@test.com',
-            password='testpass123',
-            is_staff=True,
-            is_superuser=True
+        cls.admin_user, _ = User.objects.get_or_create(
+            username=f'testadmin_{suffix}',
+            defaults={
+                'email': f'admin_{suffix}@test.com',
+                'is_staff': True,
+                'is_superuser': True
+            }
         )
+        cls.admin_user.set_password('testpass123')
+        cls.admin_user.save()
 
         # Create staff user
-        cls.staff_user = User.objects.create_user(
-            username='teststaff',
-            email='staff@test.com',
-            password='testpass123'
+        cls.staff_user, _ = User.objects.get_or_create(
+            username=f'teststaff_{suffix}',
+            defaults={
+                'email': f'staff_{suffix}@test.com',
+            }
         )
+        cls.staff_user.set_password('testpass123')
+        cls.staff_user.save()
 
         # Create student user
-        cls.student_user = User.objects.create_user(
-            username='2021BCS001',
-            email='student@test.com',
-            password='testpass123'
+        cls.student_user, _ = User.objects.get_or_create(
+            username=f'2021BCS{suffix}',
+            defaults={
+                'email': f'student_{suffix}@test.com',
+            }
         )
+        cls.student_user.set_password('testpass123')
+        cls.student_user.save()
 
         # Import models
         from api.models import (
@@ -47,50 +62,84 @@ class BaseModuleTestCase(TestCase):
         )
 
         # Create ExtraInfo for users
-        cls.admin_extra = GlobalsExtrainfo.objects.create(
-            user=cls.admin_user,
-            user_status='ACTIVE',
-            user_type='STAFF'
+        # Use username as the ID for GlobalsExtrainfo
+        cls.admin_extra, _ = GlobalsExtrainfo.objects.get_or_create(
+            id=cls.admin_user.username,
+            defaults={
+                'user': cls.admin_user,
+                'title': 'Mr',
+                'sex': 'M',
+                'date_of_birth': '1990-01-01',
+                'user_status': 'ACTIVE',
+                'user_type': 'STAFF',
+                'address': 'Test Address',
+                'about_me': 'Test user'
+            }
         )
 
-        cls.staff_extra = GlobalsExtrainfo.objects.create(
-            user=cls.staff_user,
-            user_status='ACTIVE',
-            user_type='STAFF'
+        cls.staff_extra, _ = GlobalsExtrainfo.objects.get_or_create(
+            id=cls.staff_user.username,
+            defaults={
+                'user': cls.staff_user,
+                'title': 'Mr',
+                'sex': 'M',
+                'date_of_birth': '1990-01-01',
+                'user_status': 'ACTIVE',
+                'user_type': 'STAFF',
+                'address': 'Test Address',
+                'about_me': 'Test user'
+            }
         )
 
-        cls.student_extra = GlobalsExtrainfo.objects.create(
-            user=cls.student_user,
-            user_status='ACTIVE',
-            user_type='STUDENT'
+        cls.student_extra, _ = GlobalsExtrainfo.objects.get_or_create(
+            id=cls.student_user.username,
+            defaults={
+                'user': cls.student_user,
+                'title': 'Mr',
+                'sex': 'M',
+                'date_of_birth': '2000-01-01',
+                'user_status': 'ACTIVE',
+                'user_type': 'STUDENT',
+                'address': 'Test Address',
+                'about_me': 'Test user'
+            }
         )
 
         # Create designations (roles)
-        cls.admin_role = GlobalsDesignation.objects.create(
-            name='admin',
-            full_name='Administrator',
-            category='SYSTEM',
-            description='Full system administrator'
+        cls.admin_role, _ = GlobalsDesignation.objects.get_or_create(
+            name=f'admin_{suffix}',
+            defaults={
+                'full_name': 'Administrator',
+                'category': 'SYSTEM',
+                'type': 'staff'
+            }
         )
 
-        cls.director_role = GlobalsDesignation.objects.create(
-            name='director',
-            full_name='Director',
-            category='ACADEMIC',
-            description='Academic director'
+        cls.director_role, _ = GlobalsDesignation.objects.get_or_create(
+            name=f'director_{suffix}',
+            defaults={
+                'full_name': 'Director',
+                'category': 'ACADEMIC',
+                'type': 'staff'
+            }
         )
 
-        cls.fee_collector_role = GlobalsDesignation.objects.create(
-            name='fee_collector',
-            full_name='Fee Collector',
-            category='FINANCE',
-            description='Fee collection role'
+        cls.fee_collector_role, _ = GlobalsDesignation.objects.get_or_create(
+            name=f'fee_collector_{suffix}',
+            defaults={
+                'full_name': 'Fee Collector',
+                'category': 'FINANCE',
+                'type': 'staff'
+            }
         )
 
         # Assign admin role to admin user
-        GlobalsHoldsdesignation.objects.create(
+        GlobalsHoldsdesignation.objects.get_or_create(
             user=cls.admin_user,
-            designation=cls.admin_role
+            designation=cls.admin_role,
+            defaults={
+                'working': cls.admin_user
+            }
         )
 
     def setUp(self):
