@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import GlobalsExtrainfo, GlobalsDesignation, GlobalsHoldsdesignation, AuthUser, GlobalsModuleaccess, Student, Batch, Curriculum, Discipline, Programme, Staff, GlobalsFaculty, GlobalsDepartmentinfo
+from .models import GlobalsExtrainfo, GlobalsDesignation, GlobalsHoldsdesignation, AuthUser, GlobalsModuleaccess, Student, Batch, Curriculum, Discipline, Programme, Staff, GlobalsFaculty, GlobalsDepartmentinfo, AuditLog
 
 class GlobalExtraInfoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -17,6 +17,9 @@ class GlobalsDepartmentinfoSerializer(serializers.ModelSerializer):
         fields = '__all__'
         
 class GlobalsHoldsDesignationSerializer(serializers.ModelSerializer):
+    designation_name = serializers.CharField(source='designation.name', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    
     class Meta:
         model = GlobalsHoldsdesignation
         fields = '__all__'
@@ -143,3 +146,25 @@ class ViewFacultyWithFiltersSerializer(serializers.ModelSerializer):
             d.designation.name 
             for d in obj.id.user.holds_designations.all()
         ]
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user_username = serializers.SerializerMethodField()
+    user_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AuditLog
+        fields = '__all__'
+        read_only_fields = ['timestamp']
+
+    def get_user_username(self, obj):
+        try:
+            return obj.user.username if obj.user else 'System'
+        except:
+            return 'System'
+
+    def get_user_email(self, obj):
+        try:
+            return obj.user.email if obj.user else ''
+        except:
+            return ''

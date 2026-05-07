@@ -1,28 +1,19 @@
 import React, { useState, useEffect } from "react";
 import {
-  TextInput,
-  Select,
   Button,
-  Grid,
-  Group,
   Box,
-  NumberInput,
-  Radio,
-  rem,
   Title,
-  Divider,
-  Progress,
   Flex,
+  Divider,
   Paper,
-  Stack,
-  FileInput,
 } from "@mantine/core";
 import { FaCheck, FaDiceD6, FaTimes } from "react-icons/fa";
-import { notifications, showNotification } from "@mantine/notifications";
-import { DateInput, YearPickerInput } from "@mantine/dates";
+import { rem } from "@mantine/core";
+import { showNotification } from "@mantine/notifications";
 import { useMediaQuery } from "@mantine/hooks";
-import { getAllDepartments, getAllBatches } from '../../api/Roles';
-import { createStudent, bulkUploadUsers, downloadSampleCSV } from "../../api/Users";
+import { getAllDepartments, getAllBatches } from '../../services/roleService';
+import { createStudent, bulkUploadUsers, downloadSampleCSV } from "../../services/userService";
+import StudentForm from '../../components/forms/StudentForm';
 
 const StudentCreationPage = () => {
   const xIcon = <FaTimes style={{ width: rem(20), height: rem(20) }} />;
@@ -44,126 +35,150 @@ const StudentCreationPage = () => {
     dob: null,
     phone: '',
     address: '',
+    personal_email: '',
   });
 
-  const [progress, setProgress] = useState(0);
   const [departments, setDepartments] = useState([]);
   const [batches, setBatches] = useState([]);
-  const [file, setFile] = useState(null);
+
+  const matches = useMediaQuery("(min-width: 768px)");
 
   useEffect(() => {
-    const totalFields = Object.keys(formValues).length;
-    const filledFields = Object.values(formValues).filter(
-      (value) => value
-    ).length;
-    setProgress((filledFields / totalFields) * 100);
-  }, [formValues]);
-
-  const handleChange = (field, value) => {
-    setFormValues((prev) => ({
-      ...prev,
-      [field]: field === "hall_no" ? parseInt(value, 10) || 0 : value,
-    }));
-  };
-
-  const handleFileSubmit = (file) => {
-    setFile(file);
-  }
+    fetchDepartments();
+    fetchBatches();
+  }, []);
 
   const fetchDepartments = async () => {
-      try {
-          let all_departments = [];
-          const response = await getAllDepartments();
-          for(let i=0; i<response.length; i++){
-              all_departments[i] = {value: `${response[i].id}`, label: response[i].name}
-          }
-          setDepartments(all_departments);
-      } catch (error) {
-          showNotification({
-              title: 'Error',
-              icon: xIcon,
-              position: "top-center",
-              withCloseButton: true,
-              message: 'An error occurred while fetching departments.',
-              color: 'red',
-          });
+    try {
+      let all_departments = [];
+      const response = await getAllDepartments('student');
+      for(let i=0; i<response.length; i++){
+        all_departments[i] = {value: `${response[i].id}`, label: response[i].name}
       }
+      setDepartments(all_departments);
+    } catch (error) {
+      showNotification({
+        title: 'Error',
+        icon: xIcon,
+        position: "top-center",
+        withCloseButton: true,
+        message: 'An error occurred while fetching departments.',
+        color: 'red',
+      });
+    }
   }
 
   const fetchBatches = async () => {
     try {
-        let all_batches = [];
-        const response = await getAllBatches();
-        for(let i=0; i<response.length; i++){
-            all_batches[i] = `${response[i].year}`
-        }
-        setBatches(all_batches);
+      let all_batches = [];
+      const response = await getAllBatches();
+      for(let i=0; i<response.length; i++){
+        all_batches[i] = `${response[i].year}`
+      }
+      setBatches(all_batches);
     } catch (error) {
-        showNotification({
-            title: 'Error',
-            icon: xIcon,
-            position: "top-center",
-            withCloseButton: true,
-            message: 'An error occurred while fetching batches.',
-            color: 'red',
-        });
+      showNotification({
+        title: 'Error',
+        icon: xIcon,
+        position: "top-center",
+        withCloseButton: true,
+        message: 'An error occurred while fetching batches.',
+        color: 'red',
+      });
     }
   }
 
-  const downloadCSV = (url, filename) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  const handleDownloadSampleCSV = async () => {
+    try {
+      await downloadSampleCSV();
+    } catch (error) {
+      showNotification({
+        title: 'Error',
+        icon: xIcon,
+        position: "top-center",
+        withCloseButton: true,
+        message: 'Failed to download sample CSV',
+        color: 'red',
+      });
+    }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    console.log("Form Submitted", formValues);
-
+  const handleSubmit = async ({ formValues, file }) => {
     try {
       let response;
       if(file){
+        // Bulk upload
         const formData = new FormData();
         formData.append('file', file);
         response = await bulkUploadUsers(formData);
-        setFile(null);
+        
+        // Handle bulk upload response
+        if(response.created_count > 0 || response.failed_count > 0) {
+          const message = `${response.created_count} student(s) created successfully. ${response.failed_count > 0 ? `${response.failed_count} failed.` : ''}`;
+          
+          showNotification({
+            icon: checkIcon,
+            title: "Bulk Upload Complete",
+            position: "top-center",
+            withCloseButton: true,
+            autoClose: 8000,
+            message: message,
+            color: response.failed_count > 0 ? "yellow" : "green",
+          });
+          
+          // Download failed entries CSV if exists
+          if (response.failed_csv && response.failed_count > 0) {
+            const csvUrl = URL.createObjectURL(new Blob([response.failed_csv], {type: 'text/csv'}));
+            downloadCSV(csvUrl, `failed_entries_${Date.now()}.csv`);
+            
+            setTimeout(() => {
+              showNotification({
+                icon: xIcon,
+                title: "Failed Entries Report Downloaded",
+                message: "Check the downloaded CSV for details. Fix errors and re-upload.",
+                position: "top-center",
+                withCloseButton: true,
+                autoClose: 6000,
+                color: "red",
+              });
+            }, 1000);
+          }
+        }
       }
-      else response = await createStudent(formValues);
-
-      if(response.skipped_users_count > 0){
-        const csvUrl = URL.createObjectURL(new Blob([response.skipped_users_csv], {type: 'text/csv'}));
-        downloadCSV(csvUrl, 'skipped_users.csv');
+      else {
+        // Individual student creation
+        response = await createStudent(formValues);
+        
+        showNotification({
+          icon: checkIcon,
+          title: "Student Created",
+          position: "top-center",
+          withCloseButton: true,
+          autoClose: 5000,
+          message: `Student ${response.username || 'created'} successfully. Credentials sent to ${formValues.personal_email}`,
+          color: "green",
+        });
+        
+        // Reset form
+        setFormValues({
+          username: "",
+          first_name: "",
+          last_name: "",
+          sex: "",
+          category: "",
+          father_name: "",
+          mother_name: "",
+          programme: "",
+          batch: "",
+          department: '',
+          title: '',
+          designation: '',
+          dob: null,
+          phone: '',
+          address: '',
+          personal_email: '',
+        });
       }
-      showNotification({
-        icon: checkIcon,
-        title: "Success",
-        position: "top-center",
-        withCloseButton: true,
-        autoClose: 5000,
-        message: `${response.created_users.length} Student has been Created Successfully.\n${response.skipped_users_count ? `${response.skipped_users_count} User skipped.` : ''}`,
-        color: "green",
-      });
-      setFormValues({
-        username: "",
-        first_name: "",
-        last_name: "",
-        sex: "",
-        category: "",
-        father_name: "",
-        mother_name: "",
-        programme: "",
-        batch: "",
-        department: '',
-        title: '',
-        designation: '',
-        dob: null,
-        phone: '',
-        address: '',
-      });
     } catch (err) {
       const errorMessage = err.response
         ? `${JSON.stringify(err.response.data.error) || JSON.stringify(err.response.data.data) || JSON.stringify(err.response.data.message)}`
@@ -182,30 +197,18 @@ const StudentCreationPage = () => {
     }
   };
 
-  useEffect(() => {
-    fetchDepartments();
-    fetchBatches();
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        handleSubmit();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [formValues]);
-
-  const matches = useMediaQuery("(min-width: 768px)");
+  const downloadCSV = (url, filename) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <Box maw={700} mx="auto" p="lg" shadow="sm" withBorder>
+    <Box maw={700} mx="auto" p="lg">
       <Paper shadow="xl" radius="lg" p="xl">
         <Flex
           gap="md"
@@ -241,196 +244,13 @@ const StudentCreationPage = () => {
 
         <Divider my="sm" />
 
-        {/* Progress Bar */}
-        <Progress value={progress} color="blue" mb="md" />
-
-        <Grid gutter="md">
-          {/* Roll No */}
-          <Grid.Col span={6}>
-            <TextInput
-              label="Roll Number"
-              placeholder="Enter roll number"
-              value={formValues.roll_no}
-              onChange={(e) => handleChange("username", e.target.value)}
-              required
-            />
-          </Grid.Col>
-
-          {/* First Name */}
-          <Grid.Col span={6}>
-            <TextInput
-              label="First Name"
-              placeholder="Enter first name"
-              value={formValues.first_name}
-              onChange={(e) => handleChange("first_name", e.target.value)}
-              required
-            />
-          </Grid.Col>
-
-          {/* Last Name */}
-          <Grid.Col span={6}>
-            <TextInput
-              label="Last Name"
-              placeholder="Enter last name / NA"
-              value={formValues.last_name}
-              onChange={(e) => handleChange("last_name", e.target.value)}
-              required
-            />
-          </Grid.Col>
-
-          {/* Title */}
-          <Grid.Col span={6}>
-            <Select
-              label="Title"
-              placeholder="Select title"
-              data={['Dr.', 'Mr.', 'Mrs.', 'Ms.']}
-              value={formValues.title}
-              onChange={(value) => handleChange('title', value)}
-              />
-          </Grid.Col>         
-
-          {/* Department */}
-          <Grid.Col span={12}>
-            <Select
-              label="Department"
-              placeholder="Enter department"
-              data={departments}
-              value={`${formValues.department}`}
-              onChange={(value) => handleChange('department', Number(value))}
-              />
-          </Grid.Col>  
-
-          {/* Gender */}
-          <Grid.Col span={12}>
-            <Radio.Group
-              label="Gender"
-              value={formValues.sex}
-              onChange={(value) => handleChange("sex", value)}
-              required
-            >
-              <Group spacing="sm" position="apart" mt="xs">
-                <Radio value="male" label="Male" />
-                <Radio value="female" label="Female" />
-                {/* <Radio value="other" label="Other" /> */}
-              </Group>
-            </Radio.Group>
-          </Grid.Col>
-
-          {/* Category */}
-          <Grid.Col span={12}>
-            <Select
-              label="Category"
-              placeholder="Select category"
-              data={["GEN", "OBC", "SC", "ST"]}
-              value={formValues.category}
-              onChange={(value) => handleChange("category", value)}
-              required
-            />
-          </Grid.Col>
-
-          {/* Father's Name */}
-          <Grid.Col span={6}>
-            <TextInput
-              label="Father's Name"
-              placeholder="Enter father's name"
-              value={formValues.father_name}
-              onChange={(e) => handleChange("father_name", e.target.value)}
-              required
-            />
-          </Grid.Col>
-
-          {/* Mother's Name */}
-          <Grid.Col span={6}>
-            <TextInput
-              label="Mother's Name"
-              placeholder="Enter mother's name"
-              value={formValues.mother_name}
-              onChange={(e) => handleChange("mother_name", e.target.value)}
-              required
-            />
-          </Grid.Col>
-
-          <Grid.Col span={6}>
-            <Select
-              label="Programme"
-              placeholder="Select programme"
-              data={['B.Tech', 'B.Des', 'M.Tech', 'M.Des', 'PhD']}
-              value={formValues.programme}
-              onChange={(value) => handleChange("programme", value)}
-              required
-            />
-          </Grid.Col>
-
-          <Grid.Col span={6}>
-            <Select
-              label="Batch"
-              placeholder="Select batch"
-              data={batches}
-              value={`${formValues.batch}`}
-              onChange={(value) => handleChange("batch", Number(value))}
-              required
-            />
-          </Grid.Col>
-        </Grid>
-        <Flex
-          gap="md"
-          justify="center"
-          align="center"
-          direction="row"
-          wrap="wrap"
-          mt="xl"
-        >
-          <Button onClick={handleSubmit} color="blue" size="md">
-            Add Student
-          </Button>
-        </Flex>
-
-          <Divider
-            mt={"20px"}
-            labelPosition="center"
-            label={
-              <>
-                <FaDiceD6 size={12} />
-              </>
-            }
-          />
-
-          <Stack justify="center" align="center" mt={'20px'}>
-            <Title
-              order={1}
-              sx={{
-                fontSize: { base: 'lg', sm: 'xl' },
-                lineHeight: 1.2,
-                wordBreak: 'break-word',
-              }}
-            >
-              Through CSV
-            </Title>
-            <FileInput
-              value={file}
-              onChange={handleFileSubmit}
-              size="md"
-              radius="xs"
-              placeholder="Upload CSV"
-              w={"50%"}
-            />
-            <Button
-              onClick={handleSubmit}
-              w={'50%'}
-              mt={'10px'} 
-              size="md" 
-            >
-              Create Students
-            </Button>
-
-            <Button
-            variant="light"
-            color="gray"
-            onClick={downloadSampleCSV}
-          >
-            Download Sample CSV
-          </Button>
-          </Stack>
+        <StudentForm
+          initialValues={formValues}
+          onSubmit={handleSubmit}
+          departments={departments}
+          batches={batches}
+          onDownloadSampleCSV={handleDownloadSampleCSV}
+        />
       </Paper>
     </Box>
   );

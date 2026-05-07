@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from "react";
-import axios from "axios";
 import {
   Box,
   Button,
@@ -17,7 +16,7 @@ import {
 import { FaCheck, FaTimes } from 'react-icons/fa';
 import { notifications } from '@mantine/notifications';
 import { useMediaQuery } from "@mantine/hooks";
-import { createCustomRole } from "../../api/Roles";
+import { createCustomRole } from "../../services/roleService";
 
 function getProgress(inputs) {
   const filledInputs = inputs.filter((input) => input.length > 0);
@@ -53,15 +52,6 @@ const CreateCustomRolePage = () => {
 
     try {
       await createCustomRole(roleDetails);
-      // await axios.post(
-      //   "http://127.0.0.1:8000/api/create-role/",
-      //   roleDetails,
-      //   {
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //     },
-      //   }
-      // );
 
       notifications.show({
         icon: checkIcon,

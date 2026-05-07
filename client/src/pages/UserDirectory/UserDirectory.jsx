@@ -6,7 +6,7 @@ import {
 } from "@mantine/core";
 import { debounce } from "lodash";
 import { VariableSizeList as List } from "react-window";
-import { fetchUsersByType } from "../../api/Users.jsx";
+import { fetchUsersByType } from "../../services/userService";
 
 const InfoCard = React.memo(({ person }) => (
     <Card
