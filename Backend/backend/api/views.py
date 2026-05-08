@@ -193,7 +193,7 @@ def reset_password(request):
         try:
             subject = 'Your Password has been reset!!'
             message = f"This Mail is to notify you that your password has been reset by the System Administrator.\n\nPlease check out the new password below:  {new_password}\n\nRegards,\nSystem Administrator,\nIIITDM Jabalpur."
-            recipient_list = [f"{user.email}" if settings.EMAIL_TEST_MODE == 0 else settings.EMAIL_TEST_USER]
+            recipient_list = [f"{user.email}" if int(settings.EMAIL_TEST_MODE) == 0 else settings.EMAIL_TEST_USER]
             send_email(subject=subject, message=message, recipient_list=recipient_list)
         except Exception as e:
             print(e)
