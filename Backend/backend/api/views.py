@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme, GlobalsFaculty, Staff
 from .serializers import GlobalExtraInfoSerializer, GlobalsDesignationSerializer, GlobalsModuleaccessSerializer, AuthUserSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer, GlobalsFacultySerializer, GlobalsDepartmentinfoSerializer, BatchSerializer, ProgrammeSerializer, StaffSerializer, ViewStudentsWithFiltersSerializer, ViewStaffWithFiltersSerializer, ViewFacultyWithFiltersSerializer
 from io import StringIO
-from .helpers import create_password, send_email, mail_to_user, configure_password_mail, add_user_extra_info, add_user_designation_info, add_student_info
+from .helpers import create_password, generate_random_password, send_email, mail_to_user, configure_password_mail, add_user_extra_info, add_user_designation_info, add_student_info
 from django.contrib.auth.hashers import make_password
 from backend.settings import EMAIL_TEST_ARRAY
 from django.conf import settings
@@ -186,11 +186,8 @@ def reset_password(request):
     user_name = request.data.get('username')
     try:
         user = AuthUser.objects.annotate(username_upper=Upper('username')).get(username_upper=user_name.upper())
-        new_password = create_password(request.data)
-        while new_password == user.password:
-            new_password = create_password(request.data)
-        
-        user.password = new_password
+        new_password = generate_random_password()
+        user.password = make_password(new_password)
         user.save()
         
         try:

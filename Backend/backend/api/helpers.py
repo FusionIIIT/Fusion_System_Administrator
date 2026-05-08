@@ -2,8 +2,9 @@ from rest_framework.response import Response
 from rest_framework import status
 import concurrent.futures
 import logging
-import random
+import secrets
 import string
+import random
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
@@ -14,20 +15,23 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
+def generate_random_password(length=12):
+    alphabet = string.ascii_uppercase + string.ascii_lowercase + string.digits + string.punctuation
+    while True:
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+        if (any(c in string.ascii_uppercase for c in password)
+                and any(c in string.ascii_lowercase for c in password)
+                and any(c in string.digits for c in password)
+                and any(c in string.punctuation for c in password)):
+            return password
+
 def create_password(data):
     user_name = data.get('username').lower().capitalize()
     special_characters = string.punctuation
     random_specials = ''.join(random.choice(special_characters) for _ in range(3))
     return f"{user_name}{random_specials}"
 
-
-def create_password_from_authuser(student):
-    special_characters = string.punctuation
-    random_specials = "".join(random.choice(special_characters) for _ in range(2))
-    roll_no = student.email[5:-14].upper()
-    password = f"{student.first_name.lower().capitalize().split(' ')[0]}{roll_no}{random_specials}"
-    hashed_password = make_password(password)
-    return password, hashed_password
 
 
 def save_password(student, hashed_password):
@@ -60,7 +64,8 @@ def configure_password_mail(students):
     
     try:
         for student in students[:count]:
-            plain_password, hashed_password = create_password_from_authuser(student)
+            plain_password = generate_random_password()
+            hashed_password = make_password(plain_password)
             save_password(student, hashed_password)
             try:
                 mail_to_user_single(student, plain_password)
@@ -87,11 +92,18 @@ def log_failed_email(student, plain_password, hashed_password, error):
         f.write("\n")
 
 def mail_to_user_single(student, password):
-    username = student['username'].upper()
-    email = student['email']
+    # student is either a dict (bulk CSV import) or an AuthUser ORM object (batch mail)
+    if isinstance(student, dict):
+        username = student['username'].upper()
+        email = student['email']
+        first_name = (student.get('first_name') or '').capitalize()
+    else:
+        username = student.username.upper()
+        email = student.email
+        first_name = (student.first_name or '').capitalize()
     subject = "Your Fusion Portal Account Credentials"
     message = (
-        f"Dear {student.get('first_name', '').capitalize() or 'Student'},\n\n"
+        f"Dear {first_name or 'Student'},\n\n"
         "Your account on the Fusion ERP Portal at PDPM IIITDM Jabalpur has been created.\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "  LOGIN CREDENTIALS\n"
@@ -114,20 +126,23 @@ def mail_to_user_single(student, password):
         "PDPM IIITDM Jabalpur"
     )
     recipient_list = [settings.EMAIL_TEST_USER] if settings.EMAIL_TEST_MODE == 1 else [email]
-    send_email(subject=subject, message=message, from_email="fusion@iiitdmj.ac.in", recipient_list=recipient_list)   
+    send_email(subject=subject, message=message, from_email="fusion@iiitdmj.ac.in", recipient_list=recipient_list)
     
 def mail_to_user(created_users):
     if not created_users:
         return
 
-    # Generate a unique password per user and persist it before sending
+    # Generate a unique random password per user, save hash to DB, then email plaintext
     user_passwords = {}
+    user_hashes = {}
     for user_data in created_users:
-        password = create_password(user_data)
+        password = generate_random_password()
+        hashed = make_password(password)
         user_passwords[user_data['username']] = password
+        user_hashes[user_data['username']] = hashed
         try:
             auth_user = AuthUser.objects.get(username=user_data['username'])
-            auth_user.password = make_password(password)
+            auth_user.password = hashed
             auth_user.save()
         except Exception:
             logger.exception("Failed to set password for user %s", user_data['username'])
@@ -143,8 +158,8 @@ def mail_to_user(created_users):
                 try:
                     future.result()
                 except Exception as e:
-                    password = user_passwords[user['username']]
-                    log_failed_email(user, password, make_password(password), str(e))
+                    uname = user['username']
+                    log_failed_email(user, user_passwords[uname], user_hashes[uname], str(e))
         logger.info("Credential emails sent to %d users.", len(created_users))
     except Exception as e:
         logger.exception("Failed during bulk email send")
