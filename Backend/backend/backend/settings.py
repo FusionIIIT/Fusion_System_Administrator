@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-from os import getenv
 from pathlib import Path
 
 import environ
@@ -112,14 +111,8 @@ DATABASES = {
         "PASSWORD": env("DB_PASSWORD", default="postgres"),
         "HOST": env("DB_HOST", default="localhost"),
         "PORT": env("DB_PORT", default="5432"),
-    },
-    "system_db": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": Path(getenv("SYSTEM_DB_NAME", str(BASE_DIR / "db.sqlite3"))),
     }
 }
-
-DATABASE_ROUTERS = ['backend.routers.SystemDBRouter']
 
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -129,9 +122,9 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
 EMAIL_TEST_USER = env("EMAIL_TEST_USER")
-EMAIL_TEST_MODE = env("EMAIL_TEST_MODE")
-EMAIL_TEST_COUNT = env("EMAIL_TEST_COUNT")
-EMAIL_TEST_ARRAY = env("EMAIL_TEST_ARRAY")
+EMAIL_TEST_MODE = env.int("EMAIL_TEST_MODE", default=1)
+EMAIL_TEST_COUNT = env.int("EMAIL_TEST_COUNT", default=1)
+EMAIL_TEST_ARRAY = env("EMAIL_TEST_ARRAY", default="")
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
