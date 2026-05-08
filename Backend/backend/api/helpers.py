@@ -36,10 +36,10 @@ def send_email(
     subject,
     message,
     from_email=settings.EMAIL_HOST_USER,
-    recipient_list=[
-        settings.EMAIL_TEST_USER,
-    ],
+    recipient_list=None,
 ):
+    if recipient_list is None:
+        recipient_list = [settings.EMAIL_TEST_USER]
     if not from_email:
         return Response(
             {"error": "No sender email provided."}, status=status.HTTP_400_BAD_REQUEST
@@ -121,9 +121,10 @@ def mail_to_user_single(student, password):
     )   
     
 def mail_to_user(created_users):
+    if not created_users:
+        return
     try:
-        max_threads = min(10, len(created_users)
-        )
+        max_threads = min(10, len(created_users))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
             future_to_user = [
                 executor.submit(mail_to_user_single, user, "user@123") for user in created_users
@@ -185,7 +186,7 @@ def add_user_designation_info(user_id, designation='student'):
 
 def add_student_info(row, extrainfo):
     batch = int(row[7]) if row[7] else datetime.now().year
-    batch_id = Batch.objects.all().filter(name = row[8], discipline__acronym = extrainfo.department.name, year = batch)
+    batch_id = Batch.objects.filter(name = row[8], discipline__acronym = extrainfo.department.name, year = batch)
     data = {
         'id' : extrainfo.id,
         'programme' : row[8] if row[8] else 'B.Tech',

@@ -50,7 +50,9 @@ def get_user_role_by_username(request):
         if not holds_designation_entries.exists():
             return Response({"error": "User has no designations."}, status=status.HTTP_404_NOT_FOUND)
         
-        designation_ids = [entry.designation_id for entry in holds_designation_entries]
+        designation_ids = list(
+            holds_designation_entries.values_list("designation_id", flat=True)
+        )
         
         roles = GlobalsDesignation.objects.filter(id__in=designation_ids)
         roles_serializer = GlobalsDesignationSerializer(roles, many=True)
@@ -87,8 +89,6 @@ def update_user_roles(request):
                 processed_roles_to_add.add(role['name'])
         elif isinstance(role, str):
             processed_roles_to_add.add(role)
-
-    print("Processed roles_to_add:", processed_roles_to_add)
 
     roles_to_remove = existing_role_names - processed_roles_to_add
 
@@ -195,7 +195,7 @@ def reset_password(request):
             message = f"This Mail is to notify you that your password has been reset by the System Administrator.\n\nPlease check out the new password below:  {new_password}\n\nRegards,\nSystem Administrator,\nIIITDM Jabalpur."
             recipient_list = [f"{user.email}" if settings.EMAIL_TEST_MODE == 0 else settings.EMAIL_TEST_USER]
             send_email(subject=subject, message=message, recipient_list=recipient_list)
-        except:
+        except Exception as e:
             print(e)
         finally:
             return Response({"password": new_password,"message": "Password reset successfully."}, status=status.HTTP_200_OK)
