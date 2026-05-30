@@ -25,12 +25,12 @@ environ.Env.read_env(env_file)
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-t6jw%_q8cd2528(#+=o+q33d)@#u2r+$#6kd^=fxy(90b62$*d"
+SECRET_KEY = env("SECRET_KEY", default="django-insecure-t6jw%_q8cd2528(#+=o+q33d)@#u2r+$#6kd^=fxy(90b62$*d")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool("DEBUG", default=True)
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
