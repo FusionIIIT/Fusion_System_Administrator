@@ -83,11 +83,11 @@ def log_failed_email(student, plain_password, hashed_password, error):
     log_dir = "failed_emails"
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "failed_emails.txt")
+    email = student.get('email', '') if isinstance(student, dict) else student.email
+    username = student.get('username', '') if isinstance(student, dict) else student.username
     with open(log_file, "a") as f:
-        f.write(f"Failed to send email to: {student.email}\n")
-        f.write(f"Username: {student.username}\n")
-        f.write(f"Plain Password: {plain_password}\n")
-        f.write(f"Hashed Password: {hashed_password}\n")
+        f.write(f"Failed to send email to: {email}\n")
+        f.write(f"Username: {username}\n")
         f.write(f"Error: {error}\n")
         f.write("\n")
 
@@ -126,7 +126,7 @@ def mail_to_user_single(student, password):
         "PDPM IIITDM Jabalpur"
     )
     recipient_list = [settings.EMAIL_TEST_USER] if settings.EMAIL_TEST_MODE == 1 else [email]
-    send_email(subject=subject, message=message, from_email="fusion@iiitdmj.ac.in", recipient_list=recipient_list)
+    send_email(subject=subject, message=message, from_email=settings.EMAIL_HOST_USER, recipient_list=recipient_list)
     
 def mail_to_user(created_users):
     if not created_users:

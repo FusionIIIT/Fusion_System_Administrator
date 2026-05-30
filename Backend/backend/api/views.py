@@ -10,8 +10,6 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.views import APIView
-
-logger = logging.getLogger(__name__)
 from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme, GlobalsFaculty, Staff
 from .serializers import GlobalExtraInfoSerializer, GlobalsDesignationSerializer, GlobalsModuleaccessSerializer, AuthUserSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer, GlobalsFacultySerializer, GlobalsDepartmentinfoSerializer, BatchSerializer, ProgrammeSerializer, StaffSerializer, ViewStudentsWithFiltersSerializer, ViewStaffWithFiltersSerializer, ViewFacultyWithFiltersSerializer
 from io import StringIO
@@ -19,6 +17,8 @@ from .helpers import create_password, generate_random_password, send_email, mail
 from django.contrib.auth.hashers import make_password
 from backend.settings import EMAIL_TEST_ARRAY
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['GET'])
@@ -209,7 +209,7 @@ def reset_password(request):
                 "PDPM IIITDM Jabalpur"
             )
             recipient_list = [settings.EMAIL_TEST_USER] if settings.EMAIL_TEST_MODE == 1 else [user.email]
-            send_email(subject=subject, message=message, from_email="fusion@iiitdmj.ac.in", recipient_list=recipient_list)
+            send_email(subject=subject, message=message, from_email=settings.EMAIL_HOST_USER, recipient_list=recipient_list)
         except Exception as e:
             logger.exception("Failed to send password reset email for user %s", user_name)
         finally:
