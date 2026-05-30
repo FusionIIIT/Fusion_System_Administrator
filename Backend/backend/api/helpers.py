@@ -1,15 +1,30 @@
 from rest_framework.response import Response
 from rest_framework import status
 import concurrent.futures
-import random
+import logging
+import secrets
 import string
+import random
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
 from datetime import datetime
-from .models import GlobalsDepartmentinfo, Batch, GlobalsDesignation
+from .models import GlobalsDepartmentinfo, Batch, GlobalsDesignation, AuthUser
 from .serializers import GlobalExtraInfoSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer
 import os
+
+logger = logging.getLogger(__name__)
+
+
+def generate_random_password(length=12):
+    alphabet = string.ascii_uppercase + string.ascii_lowercase + string.digits + string.punctuation
+    while True:
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+        if (any(c in string.ascii_uppercase for c in password)
+                and any(c in string.ascii_lowercase for c in password)
+                and any(c in string.digits for c in password)
+                and any(c in string.punctuation for c in password)):
+            return password
 
 def create_password(data):
     user_name = data.get('username').lower().capitalize()
@@ -17,14 +32,6 @@ def create_password(data):
     random_specials = ''.join(random.choice(special_characters) for _ in range(3))
     return f"{user_name}{random_specials}"
 
-
-def create_password_from_authuser(student):
-    special_characters = string.punctuation
-    random_specials = "".join(random.choice(special_characters) for _ in range(2))
-    roll_no = student.email[5:-14].upper()
-    password = f"{student.first_name.lower().capitalize().split(' ')[0]}{roll_no}{random_specials}"
-    hashed_password = make_password(password)
-    return password, hashed_password
 
 
 def save_password(student, hashed_password):
@@ -36,10 +43,10 @@ def send_email(
     subject,
     message,
     from_email=settings.EMAIL_HOST_USER,
-    recipient_list=[
-        settings.EMAIL_TEST_USER,
-    ],
+    recipient_list=None,
 ):
+    if recipient_list is None:
+        recipient_list = [settings.EMAIL_TEST_USER]
     if not from_email:
         return Response(
             {"error": "No sender email provided."}, status=status.HTTP_400_BAD_REQUEST
@@ -47,19 +54,19 @@ def send_email(
     try:
         send_mail(subject, message, from_email, recipient_list)
     except Exception as e:
-        print(e)
-        raise e
+        logger.exception("Failed to send email to %s", recipient_list)
+        raise
 
 def configure_password_mail(students):
     count = len(students)
-    if int(settings.EMAIL_TEST_MODE) == 1 :
-        count = int(settings.EMAIL_TEST_COUNT)
+    if settings.EMAIL_TEST_MODE == 1:
+        count = settings.EMAIL_TEST_COUNT
     
     try:
         for student in students[:count]:
-            plain_password, hashed_password = create_password_from_authuser(student)
+            plain_password = generate_random_password()
+            hashed_password = make_password(plain_password)
             save_password(student, hashed_password)
-            # save_password(student, make_password("user@123"))
             try:
                 mail_to_user_single(student, plain_password)
             except Exception as e:
@@ -69,74 +76,93 @@ def configure_password_mail(students):
             {"message": "Email sent successfully."}, status=status.HTTP_200_OK
         )
     except Exception as e:
-        print(e)
+        logger.exception("Failed during configure_password_mail")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def log_failed_email(student, plain_password, hashed_password, error):
     log_dir = "failed_emails"
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "failed_emails.txt")
+    email = student.get('email', '') if isinstance(student, dict) else student.email
+    username = student.get('username', '') if isinstance(student, dict) else student.username
     with open(log_file, "a") as f:
-        f.write(f"Failed to send email to: {student.email}\n")
-        f.write(f"Username: {student.username}\n")
-        f.write(f"Plain Password: {plain_password}\n")
-        f.write(f"Hashed Password: {hashed_password}\n")
+        f.write(f"Failed to send email to: {email}\n")
+        f.write(f"Username: {username}\n")
         f.write(f"Error: {error}\n")
         f.write("\n")
 
 def mail_to_user_single(student, password):
-    user = {"username": student['username'], "password": password, "email": student['email']}
-    subject = "Fusion Portal Credentials"
-    
+    # student is either a dict (bulk CSV import) or an AuthUser ORM object (batch mail)
+    if isinstance(student, dict):
+        username = student['username'].upper()
+        email = student['email']
+        first_name = (student.get('first_name') or '').capitalize()
+    else:
+        username = student.username.upper()
+        email = student.email
+        first_name = (student.first_name or '').capitalize()
+    subject = "Your Fusion Portal Account Credentials"
     message = (
-        f"Dear Student,\n\n"
-        "We are excited to introduce Fusion, our new ERP software, being developed by our own students, "
-        "which is now live for the Pre-Registration Process. "
-        "This platform will streamline your academic journey and provide a seamless experience for course registrations "
-        "and other academic-related activities.\n\n"
-        "Please find your login credentials below:\n\n"
-        "Portal Link: \n http://fusion.iiitdmj.ac.in:8000 \n http://fusion.iiitdmj.ac.in/ \n http://172.27.16.216:8000/  (On LAN Only) /\n"
-        f"Username: {user['username'].upper()}\n"
-        f"Password: {password}\n\n"
-        "Important Instructions:\n"
-        "1. Initial Login: Use the credentials provided above to log in to the portal.\n"
-        "2. Change Password: Upon first login, change your password with the following steps:\n"
-        "   - Log Out\n"
-        "   - Change Password\n"
-        "   - Create a new password.\n\n"
-        "Please choose a strong password and keep it confidential.\n\n"
-        "Help & Support:\n"
-        "If you encounter any issues, feel free to reach out to the support team at fusion@iiitdmj.ac.in, "
-        "or fill out the Google form at: https://forms.gle/aHvzGoS9XAAoHyix6\n\n"
-        "We look forward to your smooth experience with Fusion!\n\n"
-        "Best regards,\n"
-        "Fusion Development Team,\n"
+        f"Dear {first_name or 'Student'},\n\n"
+        "Your account on the Fusion ERP Portal at PDPM IIITDM Jabalpur has been created.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "  LOGIN CREDENTIALS\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"  Username : {username}\n"
+        f"  Password : {password}\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Portal Links:\n"
+        "  • http://fusion.iiitdmj.ac.in/\n"
+        "  • http://fusion.iiitdmj.ac.in:8000\n"
+        "  • http://172.27.16.216:8000/ (On campus LAN only)\n\n"
+        "Important:\n"
+        "  1. Log in using the credentials above.\n"
+        "  2. Change your password immediately after first login:\n"
+        "       Log Out → Change Password → Set a strong new password.\n"
+        "  3. Keep your password confidential.\n\n"
+        "Need help? Contact us at fusion@iiitdmj.ac.in\n\n"
+        "Regards,\n"
+        "Fusion Development Team\n"
         "PDPM IIITDM Jabalpur"
     )
-    recipient_list = [f"{user['email']}"]
-    if(int(settings.EMAIL_TEST_MODE) == 1):
-        recipient_list = [settings.EMAIL_TEST_USER]
-    send_email(
-        subject=subject, message=message, recipient_list=recipient_list
-    )   
+    recipient_list = [settings.EMAIL_TEST_USER] if settings.EMAIL_TEST_MODE == 1 else [email]
+    send_email(subject=subject, message=message, from_email=settings.EMAIL_HOST_USER, recipient_list=recipient_list)
     
 def mail_to_user(created_users):
-    try:
-        max_threads = min(10, len(created_users)
-        )
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
-            future_to_user = [
-                executor.submit(mail_to_user_single, user, "user@123") for user in created_users
-            ]
+    if not created_users:
+        return
 
-            for future, user in zip(future_to_user, created_users):
+    # Generate a unique random password per user, save hash to DB, then email plaintext
+    user_passwords = {}
+    user_hashes = {}
+    for user_data in created_users:
+        password = generate_random_password()
+        hashed = make_password(password)
+        user_passwords[user_data['username']] = password
+        user_hashes[user_data['username']] = hashed
+        try:
+            auth_user = AuthUser.objects.get(username=user_data['username'])
+            auth_user.password = hashed
+            auth_user.save()
+        except Exception:
+            logger.exception("Failed to set password for user %s", user_data['username'])
+
+    try:
+        max_threads = min(10, len(created_users))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+            futures = [
+                (executor.submit(mail_to_user_single, user, user_passwords[user['username']]), user)
+                for user in created_users
+            ]
+            for future, user in futures:
                 try:
                     future.result()
                 except Exception as e:
-                    log_failed_email(user, "user@123", make_password("user@123"), str(e))
-        print("Emails sent successfully.")
+                    uname = user['username']
+                    log_failed_email(user, user_passwords[uname], user_hashes[uname], str(e))
+        logger.info("Credential emails sent to %d users.", len(created_users))
     except Exception as e:
-        print(e)
+        logger.exception("Failed during bulk email send")
 
 def convert_to_iso(date_str):
     for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d/%m/%y", "%d-%m-%y"):
@@ -185,7 +211,7 @@ def add_user_designation_info(user_id, designation='student'):
 
 def add_student_info(row, extrainfo):
     batch = int(row[7]) if row[7] else datetime.now().year
-    batch_id = Batch.objects.all().filter(name = row[8], discipline__acronym = extrainfo.department.name, year = batch)
+    batch_id = Batch.objects.filter(name = row[8], discipline__acronym = extrainfo.department.name, year = batch)
     data = {
         'id' : extrainfo.id,
         'programme' : row[8] if row[8] else 'B.Tech',

@@ -1,5 +1,6 @@
 import csv
 import datetime
+import logging
 from django.http import HttpResponse
 from django.db.models import Max, Q
 from django.db.models.functions import Upper
@@ -12,10 +13,12 @@ from rest_framework.views import APIView
 from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme, GlobalsFaculty, Staff
 from .serializers import GlobalExtraInfoSerializer, GlobalsDesignationSerializer, GlobalsModuleaccessSerializer, AuthUserSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer, GlobalsFacultySerializer, GlobalsDepartmentinfoSerializer, BatchSerializer, ProgrammeSerializer, StaffSerializer, ViewStudentsWithFiltersSerializer, ViewStaffWithFiltersSerializer, ViewFacultyWithFiltersSerializer
 from io import StringIO
-from .helpers import create_password, send_email, mail_to_user, configure_password_mail, add_user_extra_info, add_user_designation_info, add_student_info
+from .helpers import create_password, generate_random_password, send_email, mail_to_user, configure_password_mail, add_user_extra_info, add_user_designation_info, add_student_info
 from django.contrib.auth.hashers import make_password
 from backend.settings import EMAIL_TEST_ARRAY
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['GET'])
@@ -50,7 +53,9 @@ def get_user_role_by_username(request):
         if not holds_designation_entries.exists():
             return Response({"error": "User has no designations."}, status=status.HTTP_404_NOT_FOUND)
         
-        designation_ids = [entry.designation_id for entry in holds_designation_entries]
+        designation_ids = list(
+            holds_designation_entries.values_list("designation_id", flat=True)
+        )
         
         roles = GlobalsDesignation.objects.filter(id__in=designation_ids)
         roles_serializer = GlobalsDesignationSerializer(roles, many=True)
@@ -87,8 +92,6 @@ def update_user_roles(request):
                 processed_roles_to_add.add(role['name'])
         elif isinstance(role, str):
             processed_roles_to_add.add(role)
-
-    print("Processed roles_to_add:", processed_roles_to_add)
 
     roles_to_remove = existing_role_names - processed_roles_to_add
 
@@ -183,22 +186,34 @@ def reset_password(request):
     user_name = request.data.get('username')
     try:
         user = AuthUser.objects.annotate(username_upper=Upper('username')).get(username_upper=user_name.upper())
-        new_password = create_password(request.data)
-        while new_password == user.password:
-            new_password = create_password(request.data)
-        
-        user.password = new_password
+        new_password = generate_random_password()
+        user.password = make_password(new_password)
         user.save()
         
         try:
-            subject = 'Your Password has been reset!!'
-            message = f"This Mail is to notify you that your password has been reset by the System Administrator.\n\nPlease check out the new password below:  {new_password}\n\nRegards,\nSystem Administrator,\nIIITDM Jabalpur."
-            recipient_list = [f"{user.email}" if settings.EMAIL_TEST_MODE == 0 else settings.EMAIL_TEST_USER]
-            send_email(subject=subject, message=message, recipient_list=recipient_list)
-        except:
-            print(e)
+            subject = "Your Fusion Portal Password Has Been Reset"
+            message = (
+                f"Dear {user.first_name.capitalize() or user.username},\n\n"
+                "Your password on the Fusion ERP Portal has been reset by the System Administrator.\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "  NEW CREDENTIALS\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"  Username : {user.username.upper()}\n"
+                f"  Password : {new_password}\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Please log in and change your password immediately.\n\n"
+                "Portal: http://fusion.iiitdmj.ac.in/\n\n"
+                "If you did not request this reset, contact us at fusion@iiitdmj.ac.in\n\n"
+                "Regards,\n"
+                "System Administrator\n"
+                "PDPM IIITDM Jabalpur"
+            )
+            recipient_list = [settings.EMAIL_TEST_USER] if settings.EMAIL_TEST_MODE == 1 else [user.email]
+            send_email(subject=subject, message=message, from_email=settings.EMAIL_HOST_USER, recipient_list=recipient_list)
+        except Exception as e:
+            logger.exception("Failed to send password reset email for user %s", user_name)
         finally:
-            return Response({"password": new_password,"message": "Password reset successfully."}, status=status.HTTP_200_OK)
+            return Response({"password": new_password, "message": "Password reset successfully."}, status=status.HTTP_200_OK)
     except AuthUser.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
@@ -597,7 +612,7 @@ def bulk_import_users(request):
             if user and extra_info_serializer and role_serializer and student_serializer:
                 created_users.append(serializer.data)
         except Exception as e:
-            print("error",e)
+            logger.exception("Failed to import user from row: %s", row)
             failed_users.append(row)
 
     if(len(created_users) > 0):
