@@ -15,6 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from rest_framework.authtoken.models import Token
@@ -22,6 +23,18 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
+
+
+def _set_auth_cookie(response, token_key):
+    response.set_cookie(
+        settings.AUTH_COOKIE_NAME,
+        token_key,
+        max_age=settings.AUTH_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+    )
+    return response
 
 
 class LoginView(ObtainAuthToken):
@@ -46,14 +59,20 @@ class LoginView(ObtainAuthToken):
         user = serializer.validated_data["user"]
         Token.objects.filter(user=user).delete()
         token = Token.objects.create(user=user)
-        return Response({"token": token.key})
+        # Deliver the token as an httpOnly cookie (browser SPA) AND in the body
+        # (API clients/scripts using the Authorization header).
+        return _set_auth_cookie(Response({"token": token.key}), token.key)
 
 
 @api_view(["POST"])
 def logout_view(request):
-    """Server-side logout: revoke the caller's token so it can't be reused."""
+    """Server-side logout: revoke the caller's token and clear the auth cookie."""
     Token.objects.filter(user=request.user).delete()
-    return Response({"message": "Logged out."})
+    response = Response({"message": "Logged out."})
+    response.delete_cookie(
+        settings.AUTH_COOKIE_NAME, samesite=settings.AUTH_COOKIE_SAMESITE
+    )
+    return response
 
 
 urlpatterns = [

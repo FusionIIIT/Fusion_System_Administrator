@@ -19,24 +19,18 @@ export const AuthProvider = ({ children }) => {
     Boolean(localStorage.getItem("isAuthenticated")),
   );
 
-  // Single source of truth for session persistence. Storing the token here (rather
-  // than in the network layer) keeps the token's whole lifecycle in one place.
-  const login = useCallback((token) => {
-    if (token) localStorage.setItem("authToken", token);
+  // The auth token lives in an httpOnly cookie (set by the API on login), so there is
+  // nothing secret to store here — only a non-sensitive "is logged in" UI hint.
+  const login = useCallback(() => {
     localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("sessionStart", Date.now().toString());
     setIsAuthenticated(true);
   }, []);
 
   const logout = useCallback(() => {
-    // Best-effort server-side revocation. Send the token explicitly and BEFORE
-    // clearing storage, so the request carries auth even though we clear right after.
-    const token = localStorage.getItem("authToken");
-    if (token) {
-      axiosInstance
-        .post("/logout/", null, { headers: { Authorization: `Token ${token}` } })
-        .catch(() => {});
-    }
+    // Best-effort server-side revocation; the browser attaches the auth cookie
+    // automatically (withCredentials), which also clears it on the response.
+    axiosInstance.post("/logout/").catch(() => {});
     setIsAuthenticated(false);
     localStorage.clear();
   }, []);

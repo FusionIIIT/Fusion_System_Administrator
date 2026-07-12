@@ -35,12 +35,19 @@ DEBUG = env.bool("DEBUG", default=False)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
+)
+
+# Allow the browser to send the httpOnly auth cookie on cross-origin XHR to the API.
+# Requires a specific allowed origin (never "*") — satisfied by CORS_ALLOWED_ORIGINS.
+CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_METHODS = [
     "GET",
@@ -58,8 +65,9 @@ CORS_ALLOW_METHODS = [
 # views that set a `throttle_scope` are rate-limited (see the login view).
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        # Tokens expire (see api.auth.ExpiringTokenAuthentication / TOKEN_TTL_HOURS).
-        "api.auth.ExpiringTokenAuthentication",
+        # Token read from an httpOnly cookie (header fallback for API clients).
+        # Tokens expire — see api.auth / TOKEN_TTL_HOURS.
+        "api.auth.CookieTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -75,6 +83,16 @@ REST_FRAMEWORK = {
 # Auth tokens are rejected (and deleted) after this many hours of age; each login
 # issues a fresh token. Set generously for an internal admin tool.
 TOKEN_TTL_HOURS = env.int("TOKEN_TTL_HOURS", default=12)
+
+# Auth token is delivered to browsers as an httpOnly cookie (invisible to JS → an XSS
+# flaw can't steal it). SameSite=Lax is the CSRF defence: browsers won't attach the
+# cookie to cross-site requests. Secure (HTTPS-only) is on whenever DEBUG is off.
+# NOTE: the SPA and API must be same-site for the cookie to be sent — in dev serve
+# both on `localhost` (see client/.env VITE_BACKEND_URL=http://localhost:8000).
+AUTH_COOKIE_NAME = env("AUTH_COOKIE_NAME", default="auth_token")
+AUTH_COOKIE_SAMESITE = env("AUTH_COOKIE_SAMESITE", default="Lax")
+AUTH_COOKIE_SECURE = not DEBUG
+AUTH_COOKIE_MAX_AGE = TOKEN_TTL_HOURS * 3600
 
 # Optional at-rest encryption for backup dump files (a Fernet key). When set, dumps
 # are encrypted on disk and decrypted transparently on restore; when empty, dumps are

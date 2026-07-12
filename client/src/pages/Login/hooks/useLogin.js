@@ -34,9 +34,10 @@ export function useLogin() {
       setLoading(true);
       try {
         // Trim the username (whitespace is never meaningful); send the password as
-        // typed so we never silently alter a credential.
-        const token = await loginRequest(username.trim(), password);
-        persistSession(token);
+        // typed so we never silently alter a credential. The server sets the auth
+        // cookie; we just flip the local "logged in" hint.
+        await loginRequest(username.trim(), password);
+        persistSession();
         notifications.show({
           title: "ACCESS GRANTED",
           message: "Authentication successful",

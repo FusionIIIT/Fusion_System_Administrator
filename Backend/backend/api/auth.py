@@ -22,3 +22,15 @@ class ExpiringTokenAuthentication(TokenAuthentication):
             token.delete()
             raise AuthenticationFailed("Token has expired. Please log in again.")
         return user, token
+
+
+class CookieTokenAuthentication(ExpiringTokenAuthentication):
+    """Read the token from the httpOnly auth cookie, falling back to the
+    ``Authorization: Token <key>`` header for API clients / scripts / tests.
+    """
+
+    def authenticate(self, request):
+        key = request.COOKIES.get(getattr(settings, "AUTH_COOKIE_NAME", "auth_token"))
+        if key:
+            return self.authenticate_credentials(key)
+        return super().authenticate(request)
