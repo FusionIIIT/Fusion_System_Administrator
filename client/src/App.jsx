@@ -160,7 +160,7 @@ function App() {
     <MantineProvider withGlobalStyles withNormalizeCSS>
       <Notifications />
       <AuthProvider>
-        <Router>
+        <Router basename={import.meta.env.BASE_URL.replace(/\/+$/, "") || undefined}>
           <Routes>
             {/* Route to the Login page by default */}
             <Route path="/login" element={<LoginPage />} />

@@ -1,8 +1,11 @@
 from django.http import JsonResponse
 from django.db import connection
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser
+
 
 @api_view(['GET'])
+@permission_classes([IsAdminUser])
 def update_globals_db(request):
     try:
         with connection.cursor() as cursor:
@@ -18,7 +21,34 @@ def update_globals_db(request):
 
             cursor.execute("""
                 ALTER TABLE globals_designation
-                ADD COLUMN IF NOT EXISTS dept_if_not_basic VARCHAR(100) NULL;
+                DROP COLUMN IF EXISTS dept_if_not_basic;
+            """)
+
+            cursor.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'globals_designation'
+                          AND column_name = 'dept_if_not_basic_id'
+                    ) THEN
+                        ALTER TABLE globals_designation
+                        ADD COLUMN dept_if_not_basic_id INTEGER;
+                        ALTER TABLE globals_designation
+                        ADD CONSTRAINT fk_dept_if_not_basic_id
+                        FOREIGN KEY (dept_if_not_basic_id)
+                        REFERENCES globals_departmentinfo (id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            """)
+
+            # GlobalsModuleaccess model has an `inventory_management` flag that older
+            # Fusion schemas lack (they have `database` instead) -> get-module-access 500.
+            cursor.execute("""
+                ALTER TABLE globals_moduleaccess
+                ADD COLUMN IF NOT EXISTS inventory_management BOOLEAN NOT NULL DEFAULT FALSE;
             """)
 
             cursor.execute("""

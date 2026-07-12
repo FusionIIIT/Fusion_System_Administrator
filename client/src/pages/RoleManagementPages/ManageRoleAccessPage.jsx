@@ -1,32 +1,22 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
-  TextInput,
   Text,
   Stack,
   Flex,
   Grid,
-  MultiSelect,
   Modal,
-  Input,
   Select,
-  useMantineTheme,
-  SimpleGrid,
   Group,
-  Container,
   rem,
   Title,
-  Tabs,
-  Space,
   Divider,
   Checkbox,
-  Center,
   Loader,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { privileges } from "../../data/privileges";
-import axios from "axios";
+import axiosInstance from "../../context/axiosInstance";
 import { FaCheck, FaTimes } from 'react-icons/fa';
 import { useMediaQuery } from "@mantine/hooks";
 
@@ -44,7 +34,7 @@ const ManageRoleAccessPage = () => {
   useEffect(() => {
     const fetchRoles = async () => {
       try {
-        const response = await axios.get(API_URL + `/api/view-roles`);
+        const response = await axiosInstance.get(`/view-roles/`);
         setRoles(response.data.map((role) => ({
           label: role.name,
           value: role.name,
@@ -68,7 +58,7 @@ const ManageRoleAccessPage = () => {
     setLoading(true);
 
     try {
-      const response = await axios.get(API_URL + `/api/get-module-access/`, {
+      const response = await axiosInstance.get(`/get-module-access/`, {
         params: { designation: roleName },
       });
       setModuleAccess(response.data);
@@ -101,7 +91,7 @@ const ManageRoleAccessPage = () => {
   const handleSubmit = async () => {
     setIsOpen(false);
     try {
-      await axios.put(API_URL + `/api/modify-roleaccess/`, {
+      await axiosInstance.put(`/modify-roleaccess/`, {
         designation: roleName,
         ...moduleAccess,
       });
@@ -127,77 +117,7 @@ const ManageRoleAccessPage = () => {
     };
   };
 
-  const stats = [
-    {
-      title: "Total users",
-      icon: "speakerPhone",
-      value: "5,173",
-      diff: 34,
-      time: "In last year",
-    },
-    {
-      title: "Total Roles",
-      icon: "speakerPhone",
-      value: "573",
-      diff: -30,
-      time: "In last year",
-    },
-    {
-      title: "Created Roles",
-      icon: "speakerPhone",
-      value: "2,543",
-      diff: 18,
-      time: "In last year",
-    },
-  ];
-
-  const cancelRef = useRef();
-
-  const getPrivilegesCount = () => {
-    return roles.map((role) => ({
-      name: role.name,
-      privilegeCount: role.length,
-    }));
-  };
-
-  const getUserCountsByRole = () => {
-    const counts = {};
-    roles.forEach((role) => {
-      counts[role.name] = (counts[role.name] || 0) + 1;
-    });
-
-    return Object.entries(counts).map(([role, count]) => ({
-      role,
-      count,
-    }));
-  };
-
-  const privilegeData = getPrivilegesCount();
-  const userRoleData = getUserCountsByRole();
-  const totalRoles = roles.length;
-  const currentYear = new Date().getFullYear();
-  const rolesCreatedThisYear = roles.filter(
-    (role) => new Date(role.createdAt).getFullYear() === currentYear
-  ).length;
-
-  const colors = [
-    "#4A90E2",
-    "#005B96",
-    "#0069B9",
-    "#1E90FF",
-    "#87CEFA",
-    "#4682B4",
-    "#4169E1",
-  ];
-
-  const privilegeOptions = privileges.map((privilege) => ({
-    value: privilege.name,
-    label: privilege.name,
-  }));
-
   const matches = useMediaQuery('(min-width: 768px)');
-
-  const API_URL = import.meta.env.VITE_BACKEND_URL;
 
   return (
     <Box

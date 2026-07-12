@@ -33,6 +33,7 @@ def _set_auth_cookie(response, token_key):
         httponly=True,
         secure=settings.AUTH_COOKIE_SECURE,
         samesite=settings.AUTH_COOKIE_SAMESITE,
+        path=settings.AUTH_COOKIE_PATH,
     )
     return response
 
@@ -71,7 +72,9 @@ def logout_view(request):
     Token.objects.filter(user=request.user).delete()
     response = Response({"message": "Logged out."})
     response.delete_cookie(
-        settings.AUTH_COOKIE_NAME, samesite=settings.AUTH_COOKIE_SAMESITE
+        settings.AUTH_COOKIE_NAME,
+        path=settings.AUTH_COOKIE_PATH,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
     )
     return response
 

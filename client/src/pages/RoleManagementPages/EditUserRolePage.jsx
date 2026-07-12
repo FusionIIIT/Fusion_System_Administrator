@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -12,7 +12,7 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import axios from "axios";
+import axiosInstance from "../../context/axiosInstance";
 import { useMediaQuery } from "@mantine/hooks";
 import { FaCheck, FaTimes } from 'react-icons/fa';
 
@@ -28,18 +28,16 @@ const EditUserRolePage = () => {
   const xIcon = <FaTimes style={{ width: rem(20), height: rem(20) }} />;
   const checkIcon = <FaCheck style={{ width: rem(20), height: rem(20) }} />;
 
-  const API_URL = import.meta.env.VITE_BACKEND_URL;
-
   const fetchUserAndRoleDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        API_URL + `/api/get-user-roles-by-username?username=${username}`
+      const response = await axiosInstance.get(
+        `/get-user-roles-by-username/?username=${username}`
       );
       setUserDetails(response.data.user);
       setCurrentRoles(response.data.roles);
       setLoading(false);
-    } catch (error) {
+    } catch {
       setLoading(false);
       notifications.show({
         title: "Error",
@@ -59,7 +57,7 @@ const EditUserRolePage = () => {
       );
       console.log(updatedRoles);
 
-      await axios.put(API_URL + `/api/update-user-roles/`, {
+      await axiosInstance.put(`/update-user-roles/`, {
         username: username,
         roles: updatedRoles,
       });
@@ -76,7 +74,7 @@ const EditUserRolePage = () => {
       fetchUserAndRoleDetails();
       setNewRoles([]);
       setIsOpen(false);
-    } catch (error) {
+    } catch {
       notifications.show({
         title: "Error",
         position: "top-center",
@@ -94,7 +92,7 @@ const EditUserRolePage = () => {
 
   const fetchAvailableRoles = async () => {
     try {
-      const response = await axios.get(API_URL + `/api/view-roles`);
+      const response = await axiosInstance.get(`/view-roles/`);
       setRoles(response.data);
     } catch (error) {
       console.log(error.response);

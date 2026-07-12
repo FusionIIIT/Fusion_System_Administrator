@@ -15,10 +15,17 @@ from pathlib import Path
 import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # the Backend/ folder
+PROJECT_ROOT = BASE_DIR.parent  # the repository root
+
 env = environ.Env()
-env_file = BASE_DIR / ".env"
-environ.Env.read_env(env_file)
+# All configuration/credentials live in a single .env — never edit this file on a
+# server. Preference order: repo-root .env (the canonical location), then Backend/.env
+# (back-compat). Real process env vars still win over both.
+for _env_file in (PROJECT_ROOT / ".env", BASE_DIR / ".env"):
+    if _env_file.exists():
+        environ.Env.read_env(_env_file)
+        break
 
 
 # Quick-start development settings - unsuitable for production
@@ -93,6 +100,7 @@ AUTH_COOKIE_NAME = env("AUTH_COOKIE_NAME", default="auth_token")
 AUTH_COOKIE_SAMESITE = env("AUTH_COOKIE_SAMESITE", default="Lax")
 AUTH_COOKIE_SECURE = not DEBUG
 AUTH_COOKIE_MAX_AGE = TOKEN_TTL_HOURS * 3600
+AUTH_COOKIE_PATH = env("AUTH_COOKIE_PATH", default="/")
 
 # Optional at-rest encryption for backup dump files (a Fernet key). When set, dumps
 # are encrypted on disk and decrypted transparently on restore; when empty, dumps are
