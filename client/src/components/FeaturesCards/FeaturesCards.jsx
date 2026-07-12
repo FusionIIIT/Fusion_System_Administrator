@@ -11,7 +11,7 @@ import {
     Menu,
     Button,
 } from '@mantine/core';
-import { FaUser, FaStar, FaArchive, FaUserGraduate, FaChalkboardTeacher, FaUsersCog, FaKey, FaUserShield, FaTasks, FaEdit, FaArchive as FaArchiveIcon, FaCube } from "react-icons/fa";
+import { FaUser, FaStar, FaArchive, FaChalkboardTeacher, FaUsersCog, FaKey, FaUserShield, FaTasks, FaEdit, FaArchive as FaArchiveIcon, FaCube } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
 import classes from './FeaturesCards.module.css';
 
@@ -21,7 +21,6 @@ const mockdata = [
         description: 'Create a User, Delete a User & Reset the Password of a User.',
         icon: FaUser,
         menuItems: [
-            { label: 'Add Student', icon: FaUserGraduate, color: 'pink', route: '/UserManagement/CreateStudent' },
             { label: 'Add Faculty', icon: FaChalkboardTeacher, color: 'grape', route: '/UserManagement/CreateFaculty' },
             { label: 'Add Staff', icon: FaUsersCog, color: 'teal', route: '/UserManagement/CreateStaff' },
             { label: 'Reset Password', icon: FaKey, color: 'violet', route: '/UserManagement/ResetUserPassword' },

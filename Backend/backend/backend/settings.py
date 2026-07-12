@@ -73,8 +73,8 @@ CORS_ALLOW_METHODS = [
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         # Token read from an httpOnly cookie (header fallback for API clients).
-        # Tokens expire — see api.auth / TOKEN_TTL_HOURS.
-        "api.auth.CookieTokenAuthentication",
+        # Tokens expire — see api.authentication / TOKEN_TTL_HOURS.
+        "api.authentication.CookieTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",

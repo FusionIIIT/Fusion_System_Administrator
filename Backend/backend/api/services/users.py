@@ -9,8 +9,8 @@ from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
 from datetime import datetime
-from .models import GlobalsDepartmentinfo, Batch, GlobalsDesignation, AuthUser
-from .serializers import GlobalExtraInfoSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer
+from ..models import GlobalsDepartmentinfo, Batch, GlobalsDesignation, AuthUser
+from ..serializers import GlobalExtraInfoSerializer, GlobalsHoldsDesignationSerializer, StudentSerializer
 import os
 
 logger = logging.getLogger(__name__)

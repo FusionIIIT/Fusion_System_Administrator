@@ -13,19 +13,19 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import BackupRecord, BackupSchedule, RestoreRecord, HealthCheck
-from . import backup_views
+from ..models import BackupRecord, BackupSchedule, RestoreRecord, HealthCheck
+from ..views import backups as backup_views
 
 # Mocking subprocess for backup/restore commands
 class BackupRestoreTests(APITestCase):
     def setUp(self):
         # Create a temporary directory for backups during tests
         self.test_backup_dir = tempfile.mkdtemp()
-        self.patcher_backup_dir = patch('api.backup_views.BACKUP_DIR', new=Path(self.test_backup_dir))
+        self.patcher_backup_dir = patch('api.views.backups.BACKUP_DIR', new=Path(self.test_backup_dir))
         self.mock_backup_dir = self.patcher_backup_dir.start()
         
         # Patch _get_db_config to return dummy Postgres config
-        self.patcher_db_config = patch('api.backup_views._get_db_config')
+        self.patcher_db_config = patch('api.views.backups._get_db_config')
         self.mock_db_config = self.patcher_db_config.start()
         self.mock_db_config.return_value = {
             "name": "test_db",
@@ -243,7 +243,7 @@ class ScheduleTests(APITestCase):
 
 class HealthCheckTests(APITestCase):
     def setUp(self):
-        self.patcher_db_config = patch('api.backup_views._get_db_config')
+        self.patcher_db_config = patch('api.views.backups._get_db_config')
         self.mock_db_config = self.patcher_db_config.start()
         self.mock_db_config.return_value = {
             "name": "test_db",
