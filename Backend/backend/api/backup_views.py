@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import threading
 import time
@@ -7,16 +8,14 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
-from django.db import connection
+from django.db import connection, connections
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import (
     api_view,
-    authentication_classes,
     permission_classes,
 )
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import BackupRecord, BackupSchedule, HealthCheck, RestoreRecord
@@ -26,9 +25,34 @@ from .models import BackupRecord, BackupSchedule, HealthCheck, RestoreRecord
 BACKUP_DIR = Path(settings.BASE_DIR) / "backups"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
+# ── database targets ─────────────────────────────────────────────────────────────
+#
+# This tool manages two PostgreSQL databases (see backend.routers.SystemDBRouter):
+#
+#   * "default"   — the main Fusion ERP database. Its name is environment-specific:
+#                   'fusionlab' in development and 'fusion_newui_prod' in production
+#                   (driven by DB_NAME in .env). This is the ONLY database we ever
+#                   restore into.
+#   * "system_db" — this admin tool's own database (operator logins, backup/restore
+#                   history, schedules, health checks).
+#
+# BOTH databases are backed up. Restore, however, is deliberately limited to the ERP
+# database: restoring "system_db" would drop and recreate the auth/backup tables that
+# the running server is actively using, crashing the process mid-restore and wiping
+# the very audit trail we depend on. So the system database is backup-only.
+MAIN_DB_ALIAS = "default"
+SYSTEM_DB_ALIAS = "system_db"
+
+# Aliases included when backing up "everything" (both databases).
+BACKUP_DB_ALIASES = (MAIN_DB_ALIAS, SYSTEM_DB_ALIAS)
+
+# Recognised names of the main ERP database across environments. A backup may only be
+# restored if its db_name is one of these — never the system database.
+RESTORABLE_DB_NAMES = {"fusionlab", "fusion_newui_prod"}
+
 
 def _get_db_config(db_alias="default"):
-    """Pull the database credentials from Django settings."""
+    """Pull the database credentials from Django settings for the given alias."""
     db = settings.DATABASES[db_alias]
     return {
         "name": db["NAME"],
@@ -39,11 +63,143 @@ def _get_db_config(db_alias="default"):
     }
 
 
+def _db_name_for_alias(db_alias):
+    """Return the configured database NAME for a settings alias."""
+    return settings.DATABASES[db_alias]["NAME"]
+
+
+def _alias_for_db_name(db_name):
+    """Resolve a database name back to its settings alias, or None if not configured.
+
+    Lets backup/health operations use the correct connection credentials for whichever
+    database was requested, instead of always assuming the "default" alias.
+    """
+    for alias, cfg in settings.DATABASES.items():
+        if cfg.get("NAME") == db_name:
+            return alias
+    return None
+
+
+def _is_restorable(db_name):
+    """Whether a backup of ``db_name`` may be restored.
+
+    Only the main Fusion ERP database (fusionlab / fusion_newui_prod) is restorable.
+    The system database is explicitly excluded — see the note above.
+    """
+    if db_name == _db_name_for_alias(SYSTEM_DB_ALIAS):
+        return False
+    return db_name in RESTORABLE_DB_NAMES
+
+
+# Dump files are named "<db_name>__<YYYY-MM-DD_HH-MM-SS>__<uuid>.dump" so they are
+# human-readable AND self-describing: at a glance you can see which database it holds
+# and when it was taken, without opening the BackupRecord. The timestamp is UTC (the
+# app runs in UTC). The trailing UUID guarantees uniqueness and links the file back to
+# its record. Fields are joined by "__"; db names use single underscores and the
+# timestamp/UUID contain none, so the fields are recovered by splitting on "__" (the
+# UUID is always the last field). Legacy names still recognised for back-compat:
+#   "<db>__<uuid>.dump"  and  "<uuid>.dump"  (no db prefix -> assumed main ERP db).
+_DUMP_SUFFIX = ".dump"
+_DUMP_SEP = "__"
+_DUMP_TS_FORMAT = "%Y-%m-%d_%H-%M-%S"
+_UNSAFE_DB_CHARS = re.compile(r"[^A-Za-z0-9_.-]")
+
+
+def _safe_db(db_name):
+    """Sanitise a db name for use as a path segment / filename part."""
+    return _UNSAFE_DB_CHARS.sub("_", db_name)
+
+
+def _dump_dir(db_name):
+    """Return (creating if needed) the per-database backup sub-folder.
+
+    Each database gets its own folder under ``backups/`` — e.g.
+    ``backups/fusionlab/`` (or ``backups/fusion_newui_prod/`` in prod) and
+    ``backups/fusion_system_db/`` — so the main ERP and system-DB dumps are never
+    mixed together on disk.
+    """
+    d = BACKUP_DIR / _safe_db(db_name)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _dump_filename(db_name, record_id, created_at):
+    """Build the on-disk dump filename for a backup record.
+
+    ``created_at`` is the record's timezone-aware creation time; it is rendered in UTC
+    so the on-disk name matches the timestamp stored in the database.
+    """
+    stamp = timezone.localtime(created_at, timezone.utc).strftime(_DUMP_TS_FORMAT)
+    return f"{_safe_db(db_name)}{_DUMP_SEP}{stamp}{_DUMP_SEP}{record_id}{_DUMP_SUFFIX}"
+
+
+def _dump_path(db_name, record_id, created_at):
+    """Full path to a backup dump: ``backups/<db_name>/<db>__<ts>__<uuid>.dump``."""
+    return str(_dump_dir(db_name) / _dump_filename(db_name, record_id, created_at))
+
+
+def _parse_dump_filename(stem):
+    """Parse a dump filename stem (name without ``.dump``) into (db_name, uuid_str).
+
+    Handles all three name shapes — "<db>__<ts>__<uuid>", "<db>__<uuid>", and legacy
+    "<uuid>". The UUID is always the last "__"-separated field and the db name (if any)
+    is the first. The timestamp field is purely cosmetic and ignored here (the record's
+    created_at is authoritative). Returns db_name=None when there is no db prefix, and
+    (None, None) if the last field is not a valid UUID.
+    """
+    parts = stem.split(_DUMP_SEP)
+    uuid_part = parts[-1]
+    try:
+        _uuid.UUID(uuid_part)
+    except ValueError:
+        return None, None
+    db_part = parts[0] if len(parts) >= 2 else None
+    return (db_part or None), uuid_part
+
+
 def _pg_env(cfg):
     """Return a copy of os.environ with PGPASSWORD set."""
     env = os.environ.copy()
     env["PGPASSWORD"] = cfg["password"]
     return env
+
+
+# ── at-rest encryption (optional) ────────────────────────────────────────────────
+#
+# When settings.BACKUP_ENCRYPTION_KEY is set, dump files are Fernet-encrypted on disk
+# (AES-128-CBC + HMAC) and decrypted to a short-lived temp file only during restore.
+# With no key, backups are plain pg_dump output (unchanged behaviour). Encryption
+# state is recorded per-backup (BackupRecord.encrypted) so restore knows what to do.
+
+
+def _get_fernet():
+    """Return a Fernet cipher if backup encryption is configured, else None."""
+    key = getattr(settings, "BACKUP_ENCRYPTION_KEY", "")
+    if not key:
+        return None
+    from cryptography.fernet import Fernet
+
+    return Fernet(key.encode() if isinstance(key, str) else key)
+
+
+def _encrypt_file_in_place(path, fernet):
+    """Replace a file's contents with their Fernet-encrypted form."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    with open(path, "wb") as fh:
+        fh.write(fernet.encrypt(data))
+
+
+def _decrypt_to_tempfile(path, fernet):
+    """Decrypt an encrypted dump into a temp file; returns its path (caller deletes)."""
+    import tempfile
+
+    with open(path, "rb") as fh:
+        plaintext = fernet.decrypt(fh.read())
+    fd, tmp = tempfile.mkstemp(suffix=".dump", dir=str(BACKUP_DIR))
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(plaintext)
+    return tmp
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────────
@@ -52,8 +208,11 @@ def _pg_env(cfg):
 def _run_backup(record_id):
     """Run pg_dump in a background thread and update the BackupRecord."""
     record = BackupRecord.objects.get(id=record_id)
-    cfg = _get_db_config()
-    dump_path = str(BACKUP_DIR / f"{record.id}.dump")
+    # Use the credentials of whichever database this record targets (main ERP or
+    # system), falling back to the main DB for orphaned/unknown names.
+    alias = _alias_for_db_name(record.db_name) or MAIN_DB_ALIAS
+    cfg = _get_db_config(alias)
+    dump_path = _dump_path(record.db_name, record.id, record.created_at)
 
     cmd = [
         "pg_dump",
@@ -87,6 +246,13 @@ def _run_backup(record_id):
             record.save()
             return
 
+        # Encrypt at rest if configured (before we record size, so it reflects the
+        # encrypted file that actually sits on disk).
+        fernet = _get_fernet()
+        if fernet:
+            _encrypt_file_in_place(dump_path, fernet)
+            record.encrypted = True
+
         file_size = os.path.getsize(dump_path) if os.path.exists(dump_path) else 0
         record.status = "success"
         record.duration_ms = elapsed_ms
@@ -108,11 +274,34 @@ def _run_backup(record_id):
         record.save()
 
 
-def _run_restore(dump_path, restore_record_id):
+def _run_restore(dump_path, restore_record_id, encrypted=False):
     """
     Run pg_restore in a background thread and update the RestoreRecord.
+
+    Restore always targets the main ERP database (the "default" alias — fusionlab in
+    dev, fusion_newui_prod in prod). The system database is never a restore target;
+    the restore_backup endpoint rejects it before we ever get here.
+
+    If the dump is encrypted at rest, it is decrypted to a short-lived temp file that
+    pg_restore reads and which is deleted in the `finally` below.
     """
-    cfg = _get_db_config()
+    cfg = _get_db_config(MAIN_DB_ALIAS)
+
+    restore_source = dump_path
+    temp_source = None
+    if encrypted:
+        fernet = _get_fernet()
+        if fernet is None:
+            record = RestoreRecord.objects.get(id=restore_record_id)
+            record.status = "failed"
+            record.error_message = (
+                "Backup is encrypted but BACKUP_ENCRYPTION_KEY is not configured."
+            )
+            record.finished_at = timezone.now()
+            record.save()
+            return
+        temp_source = _decrypt_to_tempfile(dump_path, fernet)
+        restore_source = temp_source
 
     cmd = [
         "pg_restore",
@@ -128,7 +317,7 @@ def _run_restore(dump_path, restore_record_id):
         "--if-exists",
         "--no-owner",
         "--no-privileges",
-        dump_path,
+        restore_source,
     ]
 
     start = time.time()
@@ -180,6 +369,13 @@ def _run_restore(dump_path, restore_record_id):
             record.save()
         except Exception:
             pass
+    finally:
+        # never leave a decrypted plaintext dump lying around
+        if temp_source and os.path.exists(temp_source):
+            try:
+                os.remove(temp_source)
+            except OSError:
+                pass
 
 
 # ── views ───────────────────────────────────────────────────────────────────────
@@ -189,31 +385,36 @@ def _sync_orphaned_backups():
     """
     Scan the backup folder for .dump files that have no matching
     BackupRecord and create records for them so they appear in the UI.
+
+    The database is read from the filename ("<db>__<uuid>.dump"). Legacy files
+    without a db prefix fall back to the main ERP database name.
     """
-    cfg = _get_db_config()
     existing_ids = set(
         str(pk) for pk in BackupRecord.objects.values_list("id", flat=True)
     )
 
-    for dump_file in BACKUP_DIR.glob("*.dump"):
-        file_uuid = dump_file.stem  # filename without extension
+    # Recurse: dumps now live in per-database sub-folders (older ones may still sit
+    # flat in the root), so scan the whole tree.
+    for dump_file in BACKUP_DIR.rglob(f"*{_DUMP_SUFFIX}"):
+        db_name, file_uuid = _parse_dump_filename(dump_file.stem)
+        if file_uuid is None:  # not a recognisable dump file
+            continue
         if file_uuid in existing_ids:
             continue
 
-        # validate UUID format
-        try:
-            parsed = _uuid.UUID(file_uuid)
-        except ValueError:
-            continue
+        # legacy files carry no db prefix; assume the main ERP database
+        if db_name is None:
+            db_name = _db_name_for_alias(MAIN_DB_ALIAS)
 
+        parsed = _uuid.UUID(file_uuid)
         file_size = dump_file.stat().st_size
         file_mtime = timezone.datetime.fromtimestamp(
             dump_file.stat().st_mtime, tz=timezone.utc
         )
 
-        record = BackupRecord.objects.create(
+        BackupRecord.objects.create(
             id=parsed,
-            db_name=cfg["name"],
+            db_name=db_name,
             status="success",
             size_bytes=file_size,
             file_path=str(dump_file),
@@ -223,7 +424,6 @@ def _sync_orphaned_backups():
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_backups(request):
     """List all backup records, optionally filtered by db_name."""
@@ -247,6 +447,7 @@ def list_backups(request):
                 "duration_ms": b.duration_ms,
                 "file_name": Path(b.file_path).name if b.file_path else None,
                 "error_message": b.error_message,
+                "encrypted": b.encrypted,
             }
         )
 
@@ -254,15 +455,23 @@ def list_backups(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def create_backup(request):
     """
     Kick off a new pg_dump backup in a background thread.
     Returns the backup record immediately with status 'in_progress'.
+
+    Either database may be backed up: pass ``db_name`` for the main ERP or the system
+    database. When omitted, the main ERP database is used. Unknown names are rejected
+    so we never spawn a pg_dump against a database that isn't configured.
     """
-    cfg = _get_db_config()
-    db_name = request.data.get("db_name", cfg["name"])
+    db_name = request.data.get("db_name") or _db_name_for_alias(MAIN_DB_ALIAS)
+
+    if _alias_for_db_name(db_name) is None:
+        return Response(
+            {"error": f"Unknown database '{db_name}'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     record = BackupRecord.objects.create(
         db_name=db_name,
@@ -286,7 +495,6 @@ def create_backup(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def get_backup(request, backup_id):
     """Get a single backup record by ID (used for polling status)."""
@@ -312,8 +520,7 @@ def get_backup(request, backup_id):
 
 
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])  # destructive: deletes a backup + its dump file
 def delete_backup(request, backup_id):
     """Delete a backup record and its dump file from disk."""
     try:
@@ -341,8 +548,7 @@ def delete_backup(request, backup_id):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])  # destructive: overwrites the entire ERP DB
 def restore_backup(request, backup_id):
     """
     Restore the database from a backup.
@@ -354,6 +560,20 @@ def restore_backup(request, backup_id):
     except BackupRecord.DoesNotExist:
         return Response(
             {"error": "Backup not found."}, status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Guard: only the main ERP database may be restored. Restoring the system database
+    # would drop the auth/backup tables this server is running on and crash it, so we
+    # reject it here before any pg_restore is started.
+    if not _is_restorable(b.db_name):
+        return Response(
+            {
+                "error": (
+                    f"'{b.db_name}' cannot be restored. Only the main Fusion ERP "
+                    f"database is restorable; the system database is backup-only."
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     if b.status != "success":
@@ -377,7 +597,7 @@ def restore_backup(request, backup_id):
 
     thread = threading.Thread(
         target=_run_restore,
-        args=(b.file_path, restore_record.id),
+        args=(b.file_path, restore_record.id, b.encrypted),
         daemon=True,
     )
     thread.start()
@@ -396,7 +616,6 @@ def restore_backup(request, backup_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def get_restore(request, restore_id):
     """Poll a single restore record by ID."""
@@ -411,7 +630,6 @@ def get_restore(request, restore_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_restores(request):
     """List restore records, optionally filtered by db_name."""
@@ -443,7 +661,6 @@ def _serialize_restore(r):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_health_checks(request):
     """
@@ -472,18 +689,19 @@ def list_health_checks(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def run_health_check(request):
     """
     Run a health check right now: ping the database and record the result.
     """
-    cfg = _get_db_config()
-    db_name = request.data.get("db_name", cfg["name"])
+    db_name = request.data.get("db_name") or _db_name_for_alias(MAIN_DB_ALIAS)
+    # Ping the connection that actually backs this db_name (main ERP or system),
+    # falling back to the main DB for unknown names.
+    alias = _alias_for_db_name(db_name) or MAIN_DB_ALIAS
 
     start = time.time()
     try:
-        with connection.cursor() as cursor:
+        with connections[alias].cursor() as cursor:
             cursor.execute("SELECT 1")
         elapsed_ms = int((time.time() - start) * 1000)
 
@@ -514,7 +732,6 @@ def run_health_check(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_schedules(request):
     """List all backup schedules."""
@@ -523,7 +740,6 @@ def list_schedules(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def save_schedule(request):
     """
@@ -596,7 +812,6 @@ def save_schedule(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def toggle_schedule(request, schedule_id):
     """Enable or disable a schedule without deleting it."""
@@ -622,8 +837,7 @@ def toggle_schedule(request, schedule_id):
 
 
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])  # destructive: removes a schedule + its job
 def delete_schedule(request, schedule_id):
     """Delete a schedule and remove the APScheduler job."""
     from . import scheduler as sched_module
@@ -641,7 +855,6 @@ def delete_schedule(request, schedule_id):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def preview_next_runs(request):
     """
@@ -708,48 +921,50 @@ def _serialize_schedule(s):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def db_info(request):
     """
-    Return metadata about the configured databases.
-    Currently just the default database from settings.
+    Return metadata about every database this tool manages — the main ERP database
+    and the system database — so the UI can list both as backup targets. The
+    ``restorable`` flag lets the UI hide/disable restore for backup-only databases.
     """
     _sync_orphaned_backups()
-    cfg = _get_db_config()
 
-    db_size = None
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT pg_database_size(%s)",
-                [cfg["name"]],
-            )
-            row = cursor.fetchone()
-            db_size = row[0] if row else None
-    except Exception:
-        pass
+    databases = []
+    for alias in BACKUP_DB_ALIASES:
+        cfg = _get_db_config(alias)
 
-    # count backups
-    backup_count = BackupRecord.objects.filter(db_name=cfg["name"]).count()
-    last_backup = BackupRecord.objects.filter(
-        db_name=cfg["name"], status="success"
-    ).first()
+        db_size = None
+        try:
+            # pg_database_size() is a catalog function, so the size of any database can
+            # be read from the default connection by name.
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_database_size(%s)", [cfg["name"]])
+                row = cursor.fetchone()
+                db_size = row[0] if row else None
+        except Exception:
+            pass
 
-    databases = [
-        {
-            "id": cfg["name"],
-            "name": f"{cfg['name']} (PostgreSQL)",
-            "engine": "postgresql",
-            "host": cfg["host"],
-            "port": cfg["port"],
-            "size_bytes": db_size,
-            "backup_count": backup_count,
-            "last_backup_at": last_backup.created_at.isoformat()
-            if last_backup
-            else None,
-            "status": "online",
-        }
-    ]
+        backup_count = BackupRecord.objects.filter(db_name=cfg["name"]).count()
+        last_backup = BackupRecord.objects.filter(
+            db_name=cfg["name"], status="success"
+        ).first()
+
+        databases.append(
+            {
+                "id": cfg["name"],
+                "name": f"{cfg['name']} (PostgreSQL)",
+                "engine": "postgresql",
+                "host": cfg["host"],
+                "port": cfg["port"],
+                "size_bytes": db_size,
+                "backup_count": backup_count,
+                "last_backup_at": last_backup.created_at.isoformat()
+                if last_backup
+                else None,
+                "status": "online",
+                "restorable": _is_restorable(cfg["name"]),
+            }
+        )
 
     return Response(databases)

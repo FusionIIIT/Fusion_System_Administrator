@@ -33,14 +33,25 @@ def _do_backup(db_name: str, schedule_id: str):
     import os
     import subprocess
 
-    from .backup_views import BACKUP_DIR, _get_db_config, _pg_env
+    from .backup_views import (
+        MAIN_DB_ALIAS,
+        _alias_for_db_name,
+        _dump_path,
+        _encrypt_file_in_place,
+        _get_db_config,
+        _get_fernet,
+        _pg_env,
+    )
     from .models import BackupRecord, BackupSchedule
 
     logger.info("Scheduled backup starting for db=%s", db_name)
 
-    cfg = _get_db_config()
+    # Dump the database this schedule targets (main ERP or system), using that
+    # database's own credentials — not always the default connection.
+    alias = _alias_for_db_name(db_name) or MAIN_DB_ALIAS
+    cfg = _get_db_config(alias)
     record = BackupRecord.objects.create(db_name=db_name, status="in_progress")
-    dump_path = str(BACKUP_DIR / f"{record.id}.dump")
+    dump_path = _dump_path(db_name, record.id, record.created_at)
 
     cmd = [
         "pg_dump",
@@ -53,7 +64,7 @@ def _do_backup(db_name: str, schedule_id: str):
         "-Fc",
         "-f",
         dump_path,
-        cfg["name"],
+        db_name,
     ]
 
     start = time.time()
@@ -76,6 +87,10 @@ def _do_backup(db_name: str, schedule_id: str):
                 "Scheduled backup FAILED for %s: %s", db_name, result.stderr[:200]
             )
         else:
+            fernet = _get_fernet()
+            if fernet:
+                _encrypt_file_in_place(dump_path, fernet)
+                record.encrypted = True
             file_size = os.path.getsize(dump_path) if os.path.exists(dump_path) else 0
             record.status = "success"
             record.duration_ms = elapsed_ms

@@ -1,17 +1,16 @@
 import axiosInstance from "../context/axiosInstance";
+import { CONFIG } from "../pages/Login/constants";
 
-export const handleLogin = async (username, password) => {
-  try {
-    const response = await axiosInstance.post("/login/", {
-      username,
-      password,
-    });
-    const token = response.data.token;
-    localStorage.setItem("authToken", token);
-    console.log("User logged in successfully");
-    return response.data;
-  } catch (error) {
-    console.error("Error during login:", error.message);
-    throw error;
-  }
+/**
+ * Authenticate against the backend.
+ *
+ * The server sets an httpOnly auth cookie, so there is no token to return, store, or
+ * log here. Pure network concern; never logs the credentials.
+ */
+export const login = async (username, password) => {
+  await axiosInstance.post(
+    "/login/",
+    { username, password },
+    { timeout: CONFIG.API_TIMEOUT_MS },
+  );
 };

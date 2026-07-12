@@ -15,12 +15,70 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
-from rest_framework.authtoken.views import obtain_auth_token
+from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+
+
+def _set_auth_cookie(response, token_key):
+    response.set_cookie(
+        settings.AUTH_COOKIE_NAME,
+        token_key,
+        max_age=settings.AUTH_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+    )
+    return response
+
+
+class LoginView(ObtainAuthToken):
+    """Token login, rate-limited to blunt credential brute-forcing.
+
+    ObtainAuthToken keeps `permission_classes = ()`, so this endpoint stays public;
+    we only add a scoped throttle (rate from REST_FRAMEWORK["login"]).
+
+    Each login rotates the token: the old one is deleted and a fresh one issued, so
+    expiry is measured from now (see ExpiringTokenAuthentication) and any previously
+    leaked token immediately stops working.
+    """
+
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
+        Token.objects.filter(user=user).delete()
+        token = Token.objects.create(user=user)
+        # Deliver the token as an httpOnly cookie (browser SPA) AND in the body
+        # (API clients/scripts using the Authorization header).
+        return _set_auth_cookie(Response({"token": token.key}), token.key)
+
+
+@api_view(["POST"])
+def logout_view(request):
+    """Server-side logout: revoke the caller's token and clear the auth cookie."""
+    Token.objects.filter(user=request.user).delete()
+    response = Response({"message": "Logged out."})
+    response.delete_cookie(
+        settings.AUTH_COOKIE_NAME, samesite=settings.AUTH_COOKIE_SAMESITE
+    )
+    return response
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("api.urls")),
-    path("api/login/", obtain_auth_token, name="api-login"),
+    path("api/login/", LoginView.as_view(), name="api-login"),
+    path("api/logout/", logout_view, name="api-logout"),
 ]

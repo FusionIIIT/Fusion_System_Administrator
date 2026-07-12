@@ -25,19 +25,29 @@ environ.Env.read_env(env_file)
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env("SECRET_KEY", default="django-insecure-t6jw%_q8cd2528(#+=o+q33d)@#u2r+$#6kd^=fxy(90b62$*d")
+# Required — no insecure fallback. A missing SECRET_KEY fails fast at startup rather
+# than silently running prod on a public, well-known key.
+SECRET_KEY = env("SECRET_KEY")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool("DEBUG", default=True)
+# SECURITY WARNING: never run with debug on in production.
+# Defaults to False so an unconfigured deploy is safe; dev sets DEBUG=True in .env.
+DEBUG = env.bool("DEBUG", default=False)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-]
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
+)
+
+# Allow the browser to send the httpOnly auth cookie on cross-origin XHR to the API.
+# Requires a specific allowed origin (never "*") — satisfied by CORS_ALLOWED_ORIGINS.
+CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_METHODS = [
     "GET",
@@ -46,6 +56,73 @@ CORS_ALLOW_METHODS = [
     "PATCH",
     "DELETE",
 ]
+
+
+# Django REST Framework — secure-by-default.
+# Every endpoint requires a valid auth token unless it explicitly opts out (e.g. the
+# login view sets its own empty permissions). This is defence-in-depth: even a view
+# that forgets its own @permission_classes is protected. Throttling is scoped so only
+# views that set a `throttle_scope` are rate-limited (see the login view).
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        # Token read from an httpOnly cookie (header fallback for API clients).
+        # Tokens expire — see api.auth / TOKEN_TTL_HOURS.
+        "api.auth.CookieTokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.ScopedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "5/min",
+    },
+}
+
+# Auth tokens are rejected (and deleted) after this many hours of age; each login
+# issues a fresh token. Set generously for an internal admin tool.
+TOKEN_TTL_HOURS = env.int("TOKEN_TTL_HOURS", default=12)
+
+# Auth token is delivered to browsers as an httpOnly cookie (invisible to JS → an XSS
+# flaw can't steal it). SameSite=Lax is the CSRF defence: browsers won't attach the
+# cookie to cross-site requests. Secure (HTTPS-only) is on whenever DEBUG is off.
+# NOTE: the SPA and API must be same-site for the cookie to be sent — in dev serve
+# both on `localhost` (see client/.env VITE_BACKEND_URL=http://localhost:8000).
+AUTH_COOKIE_NAME = env("AUTH_COOKIE_NAME", default="auth_token")
+AUTH_COOKIE_SAMESITE = env("AUTH_COOKIE_SAMESITE", default="Lax")
+AUTH_COOKIE_SECURE = not DEBUG
+AUTH_COOKIE_MAX_AGE = TOKEN_TTL_HOURS * 3600
+
+# Optional at-rest encryption for backup dump files (a Fernet key). When set, dumps
+# are encrypted on disk and decrypted transparently on restore; when empty, dumps are
+# stored as plain pg_dump output (unchanged behaviour). Generate one with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+BACKUP_ENCRYPTION_KEY = env("BACKUP_ENCRYPTION_KEY", default="")
+
+# Cache — backs DRF throttle counters. In production set REDIS_URL so the login rate
+# limit is shared across worker processes; otherwise each worker counts separately.
+# Dev falls back to Django's in-memory cache (single process, fine).
+REDIS_URL = env("REDIS_URL", default="")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
+    }
+
+# Production security headers — only enforced when DEBUG is off, so local dev over
+# plain HTTP is unaffected.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31_536_000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Application definition
@@ -103,6 +180,9 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# "default" holds the managed ERP data (all api models are managed=False here).
+# "system_db" holds this tool's own data: admin operators/auth + backup/restore/
+# schedule/health logs. See backend.routers.SystemDBRouter for the routing rules.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -111,8 +191,18 @@ DATABASES = {
         "PASSWORD": env("DB_PASSWORD", default="postgres"),
         "HOST": env("DB_HOST", default="localhost"),
         "PORT": env("DB_PORT", default="5432"),
-    }
+    },
+    "system_db": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env("SYSTEM_DB_NAME", default="fusion_system_db"),
+        "USER": env("SYSTEM_DB_USER", default="postgres"),
+        "PASSWORD": env("SYSTEM_DB_PASSWORD", default="postgres"),
+        "HOST": env("SYSTEM_DB_HOST", default="localhost"),
+        "PORT": env("SYSTEM_DB_PORT", default="5432"),
+    },
 }
+
+DATABASE_ROUTERS = ["backend.routers.SystemDBRouter"]
 
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

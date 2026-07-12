@@ -1,23 +1,15 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     Box,
     Button,
     Flex,
-    Input,
     Text,
     Stack,
     rem,
     Modal,
     TextInput,
-    Group,
-    Tabs,
-    Container,
     Title,
-    Space,
-    SimpleGrid,
     Divider,
-    Checkbox,
-    Center
 } from '@mantine/core';
 
 import { showNotification } from '@mantine/notifications';
@@ -57,15 +49,14 @@ const ResetUserPasswordPage = () => {
     const handleSubmit = async () => {
         try {
             setOpened(false);
-            const response = await resetPassword(formData);
-            console.log('Reset Password for:', formData);
+            await resetPassword(formData);
             close();
             showNotification({
                 title: 'Password Reset',
                 icon: checkIcon,
                 position: "top-center",
                 withCloseButton: true,
-                message: `Password for ${formData.name} has been reset successfully.\nNew password: ${response.password}`,
+                message: `Password for ${formData.name} has been reset. The new password has been emailed to the user.`,
                 color: 'green',
             });
             setFormData({
@@ -73,7 +64,7 @@ const ResetUserPasswordPage = () => {
                 rollNo: '',
             });
         }
-        catch (e) {
+        catch {
             showNotification({
                 title: 'Error',
                 icon: xIcon,
