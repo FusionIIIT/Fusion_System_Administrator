@@ -50,17 +50,17 @@ def reset_password(request):
                 "System Administrator\n"
                 "PDPM IIITDM Jabalpur"
             )
-            recipient_list = [settings.EMAIL_TEST_USER] if settings.EMAIL_TEST_MODE == 1 else [user.email]
-            send_email(subject=subject, message=message, from_email=settings.EMAIL_HOST_USER, recipient_list=recipient_list)
-        except Exception as e:
+            send_email(subject=subject, message=message, from_email=settings.EMAIL_HOST_USER, recipient_list=[user.email])
+        except Exception:
             logger.exception("Failed to send password reset email for user %s", user_name)
-        finally:
-            # Do NOT return the plaintext password in the response body — it is
-            # delivered only to the user's registered email.
-            return Response(
-                {"message": "Password reset successfully. The new password has been emailed to the user."},
-                status=status.HTTP_200_OK,
-            )
+
+        # The plaintext password is delivered only to the user's registered
+        # email, never in the response body. A failed email does not fail the
+        # reset — the password has already been changed.
+        return Response(
+            {"message": "Password reset successfully. The new password has been emailed to the user."},
+            status=status.HTTP_200_OK,
+        )
     except AuthUser.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
