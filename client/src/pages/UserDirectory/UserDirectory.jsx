@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Tabs,
@@ -21,7 +22,8 @@ import { debounce } from "lodash";
 import { VariableSizeList as List } from "react-window";
 import { fetchUsersByType } from "../../api/Users.jsx";
 
-const InfoCard = React.memo(({ person }) => (
+const InfoCard = React.memo(function InfoCard({ person }) {
+  return (
   <Card
     shadow="sm"
     radius="xl"
@@ -96,7 +98,8 @@ const InfoCard = React.memo(({ person }) => (
       </>
     )}
   </Card>
-));
+  );
+});
 
 const extractUnique = (arr, key) => [
   ...new Set(
@@ -175,7 +178,7 @@ const UserDirectory = () => {
     fetchData();
   }, [activeTab]);
 
-  const currentData = data[activeTab] || [];
+  const currentData = useMemo(() => data[activeTab] || [], [data, activeTab]);
 
   const applicableFilters =
     activeTab === "student"
@@ -198,6 +201,10 @@ const UserDirectory = () => {
     () => filterAndSearch(currentData, filters, searchQuery),
     [currentData, filters, searchQuery],
   );
+
+  const hasActiveQuery =
+    searchQuery.trim() !== "" ||
+    Object.values(filters).some((values) => values.length > 0);
 
   const semesterOptions = extractUnique(data.student, "semester");
   const facultyDesignations = extractUnique(data.faculty, "designations");
@@ -317,6 +324,10 @@ const UserDirectory = () => {
                 <Center h={200}>
                   <Loader size="md" color="blue" />
                 </Center>
+              ) : !hasActiveQuery ? (
+                <Text align="center" c="dimmed">
+                  Search by name or username, or apply a filter, to view users.
+                </Text>
               ) : filteredData.length > 0 ? (
                 <ScrollArea h={500} offsetScrollbars>
                   <VirtualList />

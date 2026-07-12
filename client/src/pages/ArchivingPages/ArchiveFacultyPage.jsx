@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from "react";
+/* eslint-disable react/prop-types */
+import { useState, useMemo } from "react";
 import {
     Tabs, Card, Text, ScrollArea, Container, Title,
     Flex, Button, TextInput, MultiSelect, Grid, Paper,
-    Center, Divider, Checkbox, Group, Modal,
+    Divider, Checkbox, Group, Modal,
     rem
 } from "@mantine/core";
 import { debounce } from "lodash";

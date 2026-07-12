@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { BarChart } from '@mantine/charts';
 // import { data } from './data';
 import { Title } from '@mantine/core'; // Import for heading

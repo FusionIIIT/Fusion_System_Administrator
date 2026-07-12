@@ -1,15 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { StatsGrid } from '../../components/StatsGrid/StatsGrid';
 import {
     Box,
-    Text,
     Group,
     TextInput,
     Tabs,
     Container,
     Title,
-    Space,
-    SimpleGrid,
     Divider,
     Modal,
     Button,
@@ -29,7 +26,7 @@ const ArchiveAnnouncementsPage = () => {
         { title: 'Archived', icon: 'arch', value: '573', diff: -30, time: "In last year" },
         { title: 'Non - Archived', icon: 'del', value: '2,543', diff: 18, time: "In last year" },
     ];
-    const [archiveAnnouncementStats, setArchiveAnnouncementStats] = useState(stats)
+    const [archiveAnnouncementStats] = useState(stats)
     const [announcementData, setAnnouncementData] = useState([])
     const [announcementList, setAnnouncementList] = useState(announcements);
 
@@ -48,7 +45,7 @@ const ArchiveAnnouncementsPage = () => {
         setAnnouncementData(Object.values(aggregatedData));
     }, [announcementList]);
 
-    const [colors, setColors] = useState([
+    const [colors] = useState([
         { name: "Archived", color: 'blue.6' }
     ])
 

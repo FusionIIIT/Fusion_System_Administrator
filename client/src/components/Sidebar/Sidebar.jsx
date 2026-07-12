@@ -6,7 +6,6 @@ import {
   FaClone,
   FaBook,
   FaSignOutAlt,
-  FaUserGraduate,
   FaChalkboardTeacher,
   FaUsersCog,
   FaKey,
@@ -16,6 +15,7 @@ import {
   FaArchive as FaArchiveIcon,
   FaHdd,
   FaClock,
+  FaLayerGroup,
 } from "react-icons/fa";
 import { Tooltip, Flex, Modal, Button } from "@mantine/core";
 import { useAuth } from "../../context/AuthContext";
@@ -54,15 +54,16 @@ const Sidebar = () => {
       action: () => navigate("/UserDirectory"),
     },
     {
+      label: "Upcoming Batches",
+      icon: <FaLayerGroup size={24} />,
+      height: "10%",
+      action: () => navigate("/UpcomingBatches"),
+    },
+    {
       label: "User Management",
       icon: <FaUserAlt size={24} />,
       menuKey: "user",
       subItems: [
-        {
-          label: "Add Student",
-          path: "/UserManagement/CreateStudent",
-          icon: <FaUserGraduate size={18} />,
-        },
         {
           label: "Add Faculty",
           path: "/UserManagement/CreateFaculty",

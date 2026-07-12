@@ -1,16 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { StatsGrid } from '../../components/StatsGrid/StatsGrid';
+import { useState, useEffect, useCallback } from 'react'
 import {
     Box,
-    Text,
     Group,
     TextInput,
     Tabs,
     Container,
     Title,
-    Space,
-    SimpleGrid,
-    Divider,
     Modal,
     Button,
     Flex,
@@ -21,13 +16,14 @@ import {
 import { Simple } from '../../charts/BarChart/Simple/Simple';
 import { useDisclosure } from '@mantine/hooks';
 import { users } from '../../data/users';
+import { notifications } from '@mantine/notifications';
 import SimplePieChart from '../../charts/PieChart/Tooltip/Tooltip';
 
 const ArchiveUsersPage = () => {
 
     const [userRoleData, setUserRoleData] = useState([])
     const [userBatchData, setUserBatchData] = useState([])
-    const [colors, setColors] = useState([
+    const [colors] = useState([
         { name: "Archived", color: 'blue.6' }
     ])
     const [userList, setUserList] = useState(users)
@@ -93,7 +89,7 @@ const ArchiveUsersPage = () => {
         );
         setSelectedUsers([]);
         close();
-        showUsers({
+        notifications.show({
             title: isArchiving ? 'Users Archived' : 'Users Unarchived',
             message: '',
             color: 'green',

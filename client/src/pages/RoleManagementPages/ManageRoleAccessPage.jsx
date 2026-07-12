@@ -52,6 +52,7 @@ const ManageRoleAccessPage = () => {
       }
     }
     fetchRoles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchModuleAccess = async () => {

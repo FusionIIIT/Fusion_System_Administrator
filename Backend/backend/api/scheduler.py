@@ -33,7 +33,7 @@ def _do_backup(db_name: str, schedule_id: str):
     import os
     import subprocess
 
-    from .backup_views import (
+    from .views.backups import (
         MAIN_DB_ALIAS,
         _alias_for_db_name,
         _dump_path,

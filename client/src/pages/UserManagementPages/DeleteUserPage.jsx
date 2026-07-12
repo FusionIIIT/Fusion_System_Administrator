@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+/* eslint-disable react/prop-types */
+import { useState, useEffect, useCallback } from 'react';
 import {
     Box,
     Group,
@@ -46,7 +47,7 @@ function Simple({ title, data, colors, datakey }) {
 
 const DeleteUserPage = () => {
     const [userBatchData, setUserBatchData] = useState([]);
-    const [colors, setColors] = useState([{ name: 'Deleted', color: 'red' }]);
+    const [colors] = useState([{ name: 'Deleted', color: 'red' }]);
     const [userList, setUserList] = useState(users);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUsers, setSelectedUsers] = useState([]);

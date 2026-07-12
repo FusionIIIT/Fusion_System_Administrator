@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
     TextInput,
     Select,
@@ -16,7 +16,7 @@ import {
     Paper,
 } from '@mantine/core';
 import { FaCheck, FaTimes } from 'react-icons/fa';
-import { notifications, showNotification } from '@mantine/notifications';
+import { showNotification } from '@mantine/notifications';
 import { DateInput } from '@mantine/dates';
 import { useMediaQuery } from "@mantine/hooks";
 import { getAllDesignations, getAllDepartments } from '../../api/Roles';
@@ -42,8 +42,8 @@ const StaffCreationPage = () => {
     const [progress, setProgress] = useState(0);
     const [roles, setRoles] = useState([]);
     const [departments, setDepartments] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [errorMessage, setErrorMessage] = useState('');
+    const [, setLoading] = useState(false);
+    const [, setErrorMessage] = useState('');
 
     useEffect(() => {
         const totalFields = Object.keys(formValues).length;
@@ -69,7 +69,7 @@ const StaffCreationPage = () => {
                 all_designations[i] = {value: `${response[i].id}`, label: response[i].name}
             }
             setRoles(all_designations);
-        } catch (error) {
+        } catch {
             showNotification({
                 title: 'Error',
                 icon: xIcon,
@@ -90,7 +90,7 @@ const StaffCreationPage = () => {
                 all_departments[i] = {value: `${response[i].id}`, label: response[i].name}
             }
             setDepartments(all_departments);
-        } catch (error) {
+        } catch {
             showNotification({
                 title: 'Error',
                 icon: xIcon,
@@ -106,7 +106,7 @@ const StaffCreationPage = () => {
         console.log(formValues)
         try{
             setLoading(true)
-            const response = await createStaff(formValues);
+            await createStaff(formValues);
             showNotification({
                 icon: checkIcon,
                 title: "Success",
@@ -129,7 +129,7 @@ const StaffCreationPage = () => {
                 phone: '',
                 address: '',
             });
-        } catch(error){
+        } catch {
             showNotification({
                 title: 'Error',
                 icon: xIcon,
@@ -146,6 +146,7 @@ const StaffCreationPage = () => {
     useEffect(()=>{
         fetchStaffDesignations();
         fetchDepartments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     },[])
 
     useEffect(() => {
@@ -161,6 +162,7 @@ const StaffCreationPage = () => {
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formValues]);
 
     const matches = useMediaQuery('(min-width: 768px)');

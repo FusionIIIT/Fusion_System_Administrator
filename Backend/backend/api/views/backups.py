@@ -18,7 +18,7 @@ from rest_framework.decorators import (
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import BackupRecord, BackupSchedule, HealthCheck, RestoreRecord
+from ..models import BackupRecord, BackupSchedule, HealthCheck, RestoreRecord
 
 # ── config ──────────────────────────────────────────────────────────────────────
 

@@ -1,4 +1,3 @@
-import React from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -16,7 +15,6 @@ import ArchiveFacultyPage from "./pages/ArchivingPages/ArchiveFacultyPage.jsx";
 
 import DeleteUserPage from "./pages/UserManagementPages/DeleteUserPage.jsx";
 import ResetUserPasswordPage from "./pages/UserManagementPages/ResetUserPasswordPage.jsx";
-import StudentCreationPage from "./pages/UserManagementPages/StudentCreationPage.jsx";
 import FacultyCreationPage from "./pages/UserManagementPages/FacultyCreationPage.jsx";
 import StaffCreationPage from "./pages/UserManagementPages/StaffCreationPage.jsx";
 
@@ -25,6 +23,7 @@ import EditUserRolePage from "./pages/RoleManagementPages/EditUserRolePage.jsx";
 import ManageRoleAccessPage from "./pages/RoleManagementPages/ManageRoleAccessPage.jsx";
 
 import UserDirectory from "./pages/UserDirectory/UserDirectory.jsx";
+import UpcomingBatchesPage from "./pages/UpcomingBatches/UpcomingBatchesPage.jsx";
 
 import BackupPage from "./pages/BackupPage/BackupPage.jsx";
 import SchedulePage from "./pages/BackupPage/SchedulePage/SchedulePage.jsx";
@@ -54,10 +53,10 @@ function Layout() {
             }
           />
           <Route
-            path="/UserManagement/CreateStudent"
+            path="/UpcomingBatches"
             element={
               <RequireAuth>
-                <StudentCreationPage />
+                <UpcomingBatchesPage />
               </RequireAuth>
             }
           />

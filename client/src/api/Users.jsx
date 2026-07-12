@@ -13,18 +13,6 @@ export const createUser = async (userData) => {
   }
 };
 
-export const createStudent = async (userData) => {
-  try {
-    const response = await axiosInstance.post("/users/add-student/", userData);
-    return response.data;
-  } catch (error) {
-    console.error(
-      `Error creating student: ${error.response?.data || error.message}`,
-    );
-    throw error;
-  }
-};
-
 export const createFaculty = async (userData) => {
   try {
     const response = await axiosInstance.post("/users/add-faculty/", userData);
@@ -61,43 +49,6 @@ export const resetPassword = async (userData) => {
   } catch (error) {
     console.error(
       "Error resetting password:",
-      error.response?.data || error.message,
-    );
-    throw error;
-  }
-};
-
-export const bulkUploadUsers = async (userData) => {
-  try {
-    const response = await axiosInstance.post("/users/import/", userData);
-    return response.data;
-  } catch (error) {
-    console.error(
-      "Error uploading users:",
-      error.response?.data || error.message,
-    );
-    throw error;
-  }
-};
-
-export const downloadSampleCSV = async () => {
-  try {
-    const response = await axiosInstance.get("/download-sample-csv/", {
-      responseType: "blob",
-    });
-
-    const blob = new Blob([response.data], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sample.csv";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error(
-      "Error fetching sample CSV:",
       error.response?.data || error.message,
     );
     throw error;

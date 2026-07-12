@@ -114,6 +114,7 @@ const EditUserRolePage = () => {
     return () => {
       document.removeEventListener("keydown", handleEnterKeyPress);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
   const matches = useMediaQuery('(min-width: 768px)');
