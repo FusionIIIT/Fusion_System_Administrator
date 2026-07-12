@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -37,7 +37,7 @@ const EditUserRolePage = () => {
       setUserDetails(response.data.user);
       setCurrentRoles(response.data.roles);
       setLoading(false);
-    } catch (error) {
+    } catch {
       setLoading(false);
       notifications.show({
         title: "Error",
@@ -74,7 +74,7 @@ const EditUserRolePage = () => {
       fetchUserAndRoleDetails();
       setNewRoles([]);
       setIsOpen(false);
-    } catch (error) {
+    } catch {
       notifications.show({
         title: "Error",
         position: "top-center",
