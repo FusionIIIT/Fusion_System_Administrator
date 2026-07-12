@@ -102,6 +102,13 @@ AUTH_COOKIE_SECURE = not DEBUG
 AUTH_COOKIE_MAX_AGE = TOKEN_TTL_HOURS * 3600
 AUTH_COOKIE_PATH = env("AUTH_COOKIE_PATH", default="/")
 
+# The tool is served under a sub-path (APP_BASE_PATH, e.g. "/sysadmin/") behind an
+# nginx that strips the prefix before proxying. FORCE_SCRIPT_NAME makes Django
+# re-add it to every generated URL — APPEND_SLASH redirects, reverse(), and DRF
+# pagination/browsable-API links — so they don't drop the mount path and fall
+# through to the main app. Resolution still uses the stripped path nginx sends.
+FORCE_SCRIPT_NAME = env("APP_BASE_PATH", default="/").rstrip("/") or None
+
 # Optional at-rest encryption for backup dump files (a Fernet key). When set, dumps
 # are encrypted on disk and decrypted transparently on restore; when empty, dumps are
 # stored as plain pg_dump output (unchanged behaviour). Generate one with:

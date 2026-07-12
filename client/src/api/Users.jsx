@@ -82,7 +82,7 @@ export const bulkUploadUsers = async (userData) => {
 
 export const downloadSampleCSV = async () => {
   try {
-    const response = await axiosInstance.get("/download-sample-csv", {
+    const response = await axiosInstance.get("/download-sample-csv/", {
       responseType: "blob",
     });
 
@@ -106,7 +106,7 @@ export const downloadSampleCSV = async () => {
 
 export const fetchUsersByType = async (type) => {
   try {
-    const response = await axiosInstance.get("/users", {
+    const response = await axiosInstance.get("/users/", {
       params: { type },
     });
     return response.data;
