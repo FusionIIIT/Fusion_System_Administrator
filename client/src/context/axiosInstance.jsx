@@ -1,8 +1,11 @@
 import axios from "axios";
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL ?? "";
-const normalizedBackendUrl = backendUrl.replace(/\/+$/, "");
-const apiBaseUrl = `${normalizedBackendUrl}/api`;
+// The API lives under the app's own base path (Vite `base`), same-origin as the SPA,
+// so the httpOnly auth cookie is always sent (dev: Vite proxy; prod: reverse proxy).
+//   base "/"          -> "/api"
+//   base "/sysadmin/" -> "/sysadmin/api"
+const appBase = import.meta.env.BASE_URL.replace(/\/+$/, "");
+const apiBaseUrl = `${appBase}/api`;
 
 const axiosInstance = axios.create({
   baseURL: apiBaseUrl,

@@ -93,6 +93,7 @@ AUTH_COOKIE_NAME = env("AUTH_COOKIE_NAME", default="auth_token")
 AUTH_COOKIE_SAMESITE = env("AUTH_COOKIE_SAMESITE", default="Lax")
 AUTH_COOKIE_SECURE = not DEBUG
 AUTH_COOKIE_MAX_AGE = TOKEN_TTL_HOURS * 3600
+AUTH_COOKIE_PATH = env("AUTH_COOKIE_PATH", default="/")
 
 # Optional at-rest encryption for backup dump files (a Fernet key). When set, dumps
 # are encrypted on disk and decrypted transparently on restore; when empty, dumps are
