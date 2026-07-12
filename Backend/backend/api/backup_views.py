@@ -11,10 +11,8 @@ from django.conf import settings
 from django.db import connection, connections
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import (
     api_view,
-    authentication_classes,
     permission_classes,
 )
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
@@ -426,7 +424,6 @@ def _sync_orphaned_backups():
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_backups(request):
     """List all backup records, optionally filtered by db_name."""
@@ -458,7 +455,6 @@ def list_backups(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def create_backup(request):
     """
@@ -499,7 +495,6 @@ def create_backup(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def get_backup(request, backup_id):
     """Get a single backup record by ID (used for polling status)."""
@@ -525,7 +520,6 @@ def get_backup(request, backup_id):
 
 
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAdminUser])  # destructive: deletes a backup + its dump file
 def delete_backup(request, backup_id):
     """Delete a backup record and its dump file from disk."""
@@ -554,7 +548,6 @@ def delete_backup(request, backup_id):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAdminUser])  # destructive: overwrites the entire ERP DB
 def restore_backup(request, backup_id):
     """
@@ -623,7 +616,6 @@ def restore_backup(request, backup_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def get_restore(request, restore_id):
     """Poll a single restore record by ID."""
@@ -638,7 +630,6 @@ def get_restore(request, restore_id):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_restores(request):
     """List restore records, optionally filtered by db_name."""
@@ -670,7 +661,6 @@ def _serialize_restore(r):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_health_checks(request):
     """
@@ -699,7 +689,6 @@ def list_health_checks(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def run_health_check(request):
     """
@@ -743,7 +732,6 @@ def run_health_check(request):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def list_schedules(request):
     """List all backup schedules."""
@@ -752,7 +740,6 @@ def list_schedules(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def save_schedule(request):
     """
@@ -825,7 +812,6 @@ def save_schedule(request):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def toggle_schedule(request, schedule_id):
     """Enable or disable a schedule without deleting it."""
@@ -851,7 +837,6 @@ def toggle_schedule(request, schedule_id):
 
 
 @api_view(["DELETE"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAdminUser])  # destructive: removes a schedule + its job
 def delete_schedule(request, schedule_id):
     """Delete a schedule and remove the APScheduler job."""
@@ -870,7 +855,6 @@ def delete_schedule(request, schedule_id):
 
 
 @api_view(["POST"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def preview_next_runs(request):
     """
@@ -937,7 +921,6 @@ def _serialize_schedule(s):
 
 
 @api_view(["GET"])
-@authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def db_info(request):
     """
