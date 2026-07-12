@@ -19,12 +19,20 @@ APP_BASE_PATH=/sysadmin/ npm run build      # emits client/dist/ served at /sysa
 The build hard-codes the base, so `dist/index.html` references `/sysadmin/assets/…`,
 routes become `/sysadmin/login`, and the API base becomes `/sysadmin/api`.
 
-## 2. Admin backend `.env` (production)
+## 2. One `.env` at the repo root (all config lives here)
+
+Put a single `.env` at the **repository root** (`Fusion_System_Administrator/.env`).
+It's git-ignored, so you never edit tracked source on the server — `settings.py` and
+`vite.config.js` read everything from it (Django loads root `.env`, falling back to
+`Backend/.env`; the frontend build reads `APP_BASE_PATH` from the same file). Real
+process env vars still override it.
 
 ```ini
 DEBUG=False
 SECRET_KEY=<strong random secret>
 ALLOWED_HOSTS=fusion.iiitdmj.ac.in
+APP_BASE_PATH=/sysadmin/     # sub-path the SPA is served under (also used by the build)
+AUTH_COOKIE_PATH=/sysadmin   # scope the auth cookie to the mount path
 
 # Main ERP database (managed=False models read/write here)
 DB_NAME=fusion_newui_prod
@@ -39,9 +47,6 @@ SYSTEM_DB_USER=fusion_admin
 SYSTEM_DB_PASSWORD=...
 SYSTEM_DB_HOST=127.0.0.1
 SYSTEM_DB_PORT=5432
-
-# Scope the auth cookie to the mount path so it never clashes with main Fusion's cookies
-AUTH_COOKIE_PATH=/sysadmin
 
 # Optional
 # REDIS_URL=redis://127.0.0.1:6379/0     # shared login-throttle counter across workers
