@@ -7,7 +7,8 @@ from django.db.models.functions import Upper
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 from rest_framework.views import APIView
 from .models import GlobalsDesignation, GlobalsHoldsdesignation, GlobalsModuleaccess, AuthUser, Batch, Student, GlobalsDepartmentinfo, Programme, GlobalsFaculty, Staff
@@ -182,6 +183,7 @@ def update_designation(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 def reset_password(request):
     user_name = request.data.get('username')
     try:
@@ -213,7 +215,12 @@ def reset_password(request):
         except Exception as e:
             logger.exception("Failed to send password reset email for user %s", user_name)
         finally:
-            return Response({"password": new_password, "message": "Password reset successfully."}, status=status.HTTP_200_OK)
+            # Do NOT return the plaintext password in the response body — it is
+            # delivered only to the user's registered email.
+            return Response(
+                {"message": "Password reset successfully. The new password has been emailed to the user."},
+                status=status.HTTP_200_OK,
+            )
     except AuthUser.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:

@@ -817,6 +817,11 @@ const BackupPage = () => {
                     )}
                     {backups.map((b) => {
                       const { date, time, relative } = fmtDate(b.created_at);
+                      // System database is backup-only; the backend rejects a
+                      // restore of it, so hide the option here too.
+                      const dbRestorable =
+                        databases.find((d) => d.id === b.db_name)?.restorable !==
+                        false;
                       return (
                         <tr key={b.id}>
                           <td>
@@ -872,20 +877,28 @@ const BackupPage = () => {
                                 </ActionIcon>
                               </Tooltip>
                               <Tooltip
-                                label="Restore from this backup"
+                                label={
+                                  dbRestorable
+                                    ? "Restore from this backup"
+                                    : "This database is backup-only and cannot be restored"
+                                }
                                 withArrow
                               >
-                                <ActionIcon
-                                  color="blue"
-                                  variant="light"
-                                  radius="md"
-                                  disabled={b.status !== "success"}
-                                  onClick={() =>
-                                    setRestoreModal({ open: true, id: b.id })
-                                  }
-                                >
-                                  <FaUpload size={14} />
-                                </ActionIcon>
+                                <span>
+                                  <ActionIcon
+                                    color="blue"
+                                    variant="light"
+                                    radius="md"
+                                    disabled={
+                                      b.status !== "success" || !dbRestorable
+                                    }
+                                    onClick={() =>
+                                      setRestoreModal({ open: true, id: b.id })
+                                    }
+                                  >
+                                    <FaUpload size={14} />
+                                  </ActionIcon>
+                                </span>
                               </Tooltip>
                             </Group>
                           </td>

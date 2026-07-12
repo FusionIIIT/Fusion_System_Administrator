@@ -1,17 +1,18 @@
 import axiosInstance from "../context/axiosInstance";
+import { CONFIG } from "../pages/Login/constants";
 
-export const handleLogin = async (username, password) => {
-  try {
-    const response = await axiosInstance.post("/login/", {
-      username,
-      password,
-    });
-    const token = response.data.token;
-    localStorage.setItem("authToken", token);
-    console.log("User logged in successfully");
-    return response.data;
-  } catch (error) {
-    console.error("Error during login:", error.message);
-    throw error;
-  }
+/**
+ * Authenticate against the backend and return the auth token.
+ *
+ * Pure network concern: it does NOT persist anything and never logs the credentials
+ * or the token. Session persistence is centralised in AuthContext.login(token), which
+ * keeps the token's lifecycle in one place.
+ */
+export const login = async (username, password) => {
+  const { data } = await axiosInstance.post(
+    "/login/",
+    { username, password },
+    { timeout: CONFIG.API_TIMEOUT_MS },
+  );
+  return data.token;
 };

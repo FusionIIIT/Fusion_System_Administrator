@@ -276,6 +276,10 @@ class BackupRecord(models.Model):
     error_message = models.TextField(
         blank=True, default="", help_text="Error message if backup failed"
     )
+    encrypted = models.BooleanField(
+        default=False,
+        help_text="Whether the dump file is encrypted at rest (Fernet)",
+    )
 
     class Meta:
         managed = True
