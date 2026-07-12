@@ -199,6 +199,10 @@ const UserDirectory = () => {
     [currentData, filters, searchQuery],
   );
 
+  const hasActiveQuery =
+    searchQuery.trim() !== "" ||
+    Object.values(filters).some((values) => values.length > 0);
+
   const semesterOptions = extractUnique(data.student, "semester");
   const facultyDesignations = extractUnique(data.faculty, "designations");
 
@@ -317,6 +321,10 @@ const UserDirectory = () => {
                 <Center h={200}>
                   <Loader size="md" color="blue" />
                 </Center>
+              ) : !hasActiveQuery ? (
+                <Text align="center" c="dimmed">
+                  Search by name or username, or apply a filter, to view users.
+                </Text>
               ) : filteredData.length > 0 ? (
                 <ScrollArea h={500} offsetScrollbars>
                   <VirtualList />
