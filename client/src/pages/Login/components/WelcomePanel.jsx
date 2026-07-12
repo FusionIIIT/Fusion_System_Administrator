@@ -97,32 +97,33 @@ export default function WelcomePanel({ isLogin, onEnter }) {
         </Box>
 
         {!isLogin && (
-          <UnstyledButton
-            onClick={onEnter}
-            mt={80}
-            aria-label="Proceed to login"
-            style={{
-              padding: "24px 80px",
-              background: "linear-gradient(135deg, #111 0%, #15ABFF 100%)",
-              color: "#FFF",
-              transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-              width: "fit-content",
-              boxShadow: "0 10px 40px rgba(21,171,255,0.3)",
-              margin: "0 auto",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 15px 50px rgba(21,171,255,0.5)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 10px 40px rgba(21,171,255,0.3)";
-            }}
-          >
-            <Text fw={900} lts={4} size="sm">
-              Login →
-            </Text>
-          </UnstyledButton>
+          <Box>
+            <UnstyledButton
+              onClick={onEnter}
+              mt={80}
+              aria-label="Proceed to login"
+              style={{
+                padding: "24px 80px",
+                background: "linear-gradient(135deg, #111 0%, #15ABFF 100%)",
+                color: "#FFF",
+                transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                width: "fit-content",
+                boxShadow: "0 10px 40px rgba(21,171,255,0.3)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 15px 50px rgba(21,171,255,0.5)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 10px 40px rgba(21,171,255,0.3)";
+              }}
+            >
+              <Text fw={900} lts={4} size="sm">
+                Login →
+              </Text>
+            </UnstyledButton>
+          </Box>
         )}
       </Stack>
     </Box>

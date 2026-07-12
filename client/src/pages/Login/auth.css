@@ -87,7 +87,10 @@
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  /* Match the main Fusion client exactly: 'Inter' then a plain sans-serif fallback
+     (Arial/Helvetica). Using system-ui here made the giant outlined "WELCOME" render
+     in San Francisco, whose "M" differs from the main client's Arial "M". */
+  font-family: "Inter", sans-serif;
 }
 
 .fsa-auth__shake {

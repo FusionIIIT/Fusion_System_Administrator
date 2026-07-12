@@ -69,7 +69,7 @@ export default function LoginForm({
   };
 
   return (
-    <Stack gap={isMobile ? 25 : 50} style={{ paddingTop: 20, paddingBottom: 40 }}>
+    <Stack gap={isMobile ? 18 : 30} style={{ paddingTop: 20, paddingBottom: 40 }}>
       <Box>
         <UnstyledButton
           onClick={onBack}
@@ -107,7 +107,6 @@ export default function LoginForm({
         <Box
           role="alert"
           aria-live="assertive"
-          mt={isMobile ? 20 : 30}
           p="sm"
           style={{
             display: "flex",
@@ -127,8 +126,8 @@ export default function LoginForm({
         </Box>
       )}
 
-      <form onSubmit={handleSubmit} style={{ marginTop: isMobile ? 30 : 40 }} noValidate>
-        <Stack gap={isMobile ? "lg" : "xl"}>
+      <form onSubmit={handleSubmit} noValidate>
+        <Stack gap={isMobile ? "md" : "lg"}>
           <TextInput
             label={<RequiredLabel>USERNAME</RequiredLabel>}
             placeholder="Username / Roll No."
