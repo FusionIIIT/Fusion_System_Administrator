@@ -3,7 +3,6 @@ import {
     FaUserAlt,
     FaArchive,            
     FaUserMinus,
-    FaUserPlus,
     FaUserCog
 } from 'react-icons/fa'; 
 import classes from '../FeaturesCards/FeaturesCards.module.css';

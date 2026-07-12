@@ -11,7 +11,7 @@ import {
     Menu,
     Button,
 } from '@mantine/core';
-import { FaUser, FaStar, FaArchive, FaChalkboardTeacher, FaUsersCog, FaKey, FaUserShield, FaTasks, FaEdit, FaArchive as FaArchiveIcon, FaCube } from "react-icons/fa";
+import { FaUser, FaStar, FaArchive, FaChalkboardTeacher, FaUsersCog, FaKey, FaUserShield, FaTasks, FaEdit } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
 import classes from './FeaturesCards.module.css';
 

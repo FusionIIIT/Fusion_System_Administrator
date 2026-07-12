@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from "react";
+/* eslint-disable react/prop-types */
+import { useState, useMemo } from "react";
 import {
     Tabs, Card, Text, ScrollArea, Container, Title,
-    Flex, Button, TextInput, MultiSelect, Grid, Loader,
-    Paper, Center, Divider, Checkbox, Group,
+    Flex, Button, TextInput, MultiSelect, Grid,
+    Paper, Divider, Checkbox, Group,
     rem, Modal
 } from "@mantine/core";
 import { debounce } from "lodash";
 import { showNotification } from "@mantine/notifications";
-import { FaCheck, FaTimes } from "react-icons/fa";
+import { FaCheck } from "react-icons/fa";
 
 const STATIC_STUDENTS = [
     {

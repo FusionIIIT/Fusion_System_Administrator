@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { Group, Paper, SimpleGrid, Text } from '@mantine/core';
 import {
     FaUserAlt,
