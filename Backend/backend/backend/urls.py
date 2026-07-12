@@ -48,6 +48,7 @@ class LoginView(ObtainAuthToken):
     leaked token immediately stops working.
     """
 
+    authentication_classes = []
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "login"
 
