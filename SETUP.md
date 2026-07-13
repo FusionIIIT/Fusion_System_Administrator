@@ -37,12 +37,21 @@ Open the **psql** shell. You can find it in the Start Menu under **PostgreSQL �
 Press Enter to accept defaults for host/port/dbname, then enter your `postgres` password.  
 Choose your own database username and a strong password instead of using a shared example value.
 
+The tool uses **two databases** (see the two-database design in the README):
+`fusionlab` holds the managed=False ERP tables, and `fusion_system_db` holds the tool's own
+tables (operators/auth + backup logs).
+
 ```sql
 CREATE USER <DB_USER> WITH PASSWORD '<DB_PASSWORD>';
 CREATE DATABASE fusionlab OWNER <DB_USER>;
+CREATE DATABASE fusion_system_db OWNER <DB_USER>;
 GRANT ALL PRIVILEGES ON DATABASE fusionlab TO <DB_USER>;
+GRANT ALL PRIVILEGES ON DATABASE fusion_system_db TO <DB_USER>;
 \q
 ```
+
+> For a realistic dev environment, restore a dump of the ERP database into `fusionlab`
+> (its ERP tables are `managed=False` — this tool never creates them).
 
 ### Fix authentication method (required on most Windows installs) (Optional)
 
@@ -97,47 +106,59 @@ pip install apscheduler django-apscheduler
 
 ### 3.3 Create the `.env` file
 
-The `.env` file must sit at `Backend\.env` (one level above the `backend/` folder).  
-Create it with Notepad or any editor:
+Create a single `.env` at the **repository root** (`Fusion_System_Administrator\.env`).
+`settings.py` reads it automatically (falling back to `Backend\.env`). All config lives
+here — you never edit `settings.py`. Minimal dev config (full reference in §10):
 
 ```
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
+SECRET_KEY=dev-secret-change-me
+DEBUG=True
+
+# ERP database (default)
+DB_NAME=fusionlab
+DB_USER=<DB_USER>
+DB_PASSWORD=<DB_PASSWORD>
+DB_HOST=127.0.0.1
+DB_PORT=5432
+
+# Tool database (system_db)
+SYSTEM_DB_NAME=fusion_system_db
+SYSTEM_DB_USER=<DB_USER>
+SYSTEM_DB_PASSWORD=<DB_PASSWORD>
+SYSTEM_DB_HOST=127.0.0.1
+SYSTEM_DB_PORT=5432
+
+# Email
 EMAIL_HOST_USER=your_gmail@gmail.com
 EMAIL_HOST_PASSWORD=your_gmail_app_password
 EMAIL_TEST_USER=your_gmail@gmail.com
 EMAIL_TEST_MODE=1
-EMAIL_TEST_COUNT=1
-EMAIL_TEST_ARRAY="[]"
 ```
 
 > **Gmail App Password:** Go to your Google Account → Security → 2-Step Verification → App Passwords.  
 > Generate one for "Mail" and paste it as `EMAIL_HOST_PASSWORD`.
 
-### 3.4 Verify the database settings
+### 3.4 Verify the configuration
 
-Open `Backend\backend\backend\settings.py` and confirm the `DATABASES` block matches what you created in step 2:
-
-```python
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "fusionlab",
-        "USER": "fusion_admin",
-        "PASSWORD": "hello123",
-        "HOST": "localhost",
-        "PORT": "5432",
-    }
-}
-```
-
-Change `USER` and `PASSWORD` if you chose different values.
-
-### 3.5 Run migrations
+`settings.py` builds both database connections from the `.env` values above — you do **not**
+edit `settings.py`. Confirm everything is wired correctly:
 
 ```cmd
 cd backend
-python manage.py migrate
+python manage.py check
+```
+
+Expect `System check identified no issues`. A missing `SECRET_KEY`, database credentials, or
+email variables will fail fast here with a clear message.
+
+### 3.5 Run migrations
+
+The tool's own tables live in `system_db` (`fusion_system_db`). The ERP tables are
+`managed=False`, so migrations only ever build the `system_db` schema:
+
+```cmd
+cd backend
+python manage.py migrate --database=system_db
 ```
 
 Expected output ends with something like:
@@ -146,10 +167,12 @@ Expected output ends with something like:
 Applying django_apscheduler.0009_djangojobexecution_unique_job_executions... OK
 ```
 
-### 3.6 Create a superuser (admin login)
+### 3.6 Create an operator (admin login)
+
+Operators are stored in `system_db`, separate from ERP users:
 
 ```cmd
-python manage.py createsuperuser
+python manage.py createsuperuser --database=system_db
 ```
 
 Enter a username, email (optional), and password when prompted.  
@@ -182,13 +205,11 @@ cd Fusion_System_Administrator\client
 npm install
 ```
 
-### 4.3 Create the frontend `.env` file
+### 4.3 Frontend configuration
 
-Create a file called `.env` inside the `client\` folder with this content:
-
-```
-VITE_BACKEND_URL=http://127.0.0.1:8000
-```
+No frontend `.env` is needed for local development — `npm run dev` proxies `/api` to the
+backend at `http://localhost:8000` (see `client\vite.config.js`). The build's base path is
+taken from `APP_BASE_PATH` in the root `.env` (used for sub-path hosting in production).
 
 ### 4.4 Start the frontend dev server
 
@@ -214,22 +235,28 @@ Open that URL in your browser.
 
 ```
 Fusion_System_Administrator/
+├── .env                      ← single config file (repo root; git-ignored)
 ├── Backend/
-│   ├── .env                  ← environment variables (you create this)
 │   ├── requirements.txt
 │   └── backend/
 │       ├── manage.py
-│       ├── backups/          ← pg_dump files stored here (auto-created)
-│       ├── api/              ← Django app: models, views, urls
-│       └── backend/          ← Django project: settings, urls, wsgi
+│       ├── backups/          ← pg_dump files stored here (auto-created; per-DB subfolders)
+│       ├── api/              ← Django app (modular, by domain):
+│       │   ├── models/       ← erp.py · batches.py · backups.py
+│       │   ├── serializers/  ← entities.py · directory.py
+│       │   ├── services/     ← batches.py · users.py … (business logic)
+│       │   ├── views/        ← directory · roles · users · schema · backups · batches
+│       │   ├── urls/         ← per-domain modules + aggregator
+│       │   ├── authentication.py · permissions.py · scheduler.py
+│       │   └── tests/
+│       └── backend/          ← Django project: settings, urls, wsgi, routers (SystemDBRouter)
 └── client/
-    ├── .env                  ← VITE_BACKEND_URL (you create this)
-    ├── package.json
     └── src/
         ├── api/              ← Axios API clients
-        ├── components/       ← Sidebar, RequireAuth, etc.
+        ├── components/       ← AppLayout (AppShell), PageHeader, RequireAuth, …
         ├── context/          ← AuthContext, axiosInstance
-        └── pages/            ← All page components
+        ├── pages/            ← Dashboard, UserDirectory, UpcomingBatches, RoleManagement, …
+        └── theme.js          ← global Mantine theme
 ```
 
 ---
@@ -314,9 +341,12 @@ venv\Scripts\activate
 
 Node.js is not installed or not on PATH. Re-install from https://nodejs.org/ and restart your terminal.
 
-### CORS error in browser console
+### API calls fail / CORS error in browser console
 
-Make sure `VITE_BACKEND_URL` in `client\.env` is exactly `http://127.0.0.1:8000` (no trailing slash) and that the backend is actually running. Restart the Vite dev server after changing `.env`.
+The SPA calls a relative `/api`, which `npm run dev` proxies to `http://localhost:8000`
+(same-origin — no CORS needed). Make sure the **backend is running on port 8000** and you're
+using the Vite dev URL (`http://localhost:5173`), not opening the built files directly. If
+you changed the proxy target in `client\vite.config.js`, restart the Vite dev server.
 
 ### Frontend shows blank page or login loop
 
@@ -343,21 +373,31 @@ Backup dump files are stored in `Backend\backups\` and are automatically pruned 
 
 ## 10. Environment Variables Reference
 
-### `Backend\.env`
+All configuration lives in **one git-ignored `.env` at the repository root**. `settings.py`
+reads the root `.env` first and falls back to `Backend/.env`; the Vite build reads
+`APP_BASE_PATH` from the same file. Real process environment variables override both.
 
-| Variable | Description | Example |
-|---|---|---|
-| `EMAIL_PORT` | SMTP port | `587` |
-| `EMAIL_USE_TLS` | Use TLS | `True` |
-| `EMAIL_HOST_USER` | Gmail address | `you@gmail.com` |
-| `EMAIL_HOST_PASSWORD` | Gmail App Password | `abcd efgh ijkl mnop` |
-| `EMAIL_TEST_USER` | Address that receives test emails | `you@gmail.com` |
-| `EMAIL_TEST_MODE` | `1` = test mode, `0` = production | `1` |
-| `EMAIL_TEST_COUNT` | Number of test emails to send | `1` |
-| `EMAIL_TEST_ARRAY` | Specific addresses to send to in test mode (JSON array string, empty = all users) | `"[]"` |
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `SECRET_KEY` | yes | Django secret key | `<random>` |
+| `DEBUG` | no | `True` for dev; `False` enables Secure cookies + HTTPS headers | `True` |
+| `ALLOWED_HOSTS` | prod | Comma-separated hosts | `fusion.iiitdmj.ac.in` |
+| `APP_BASE_PATH` | prod | Sub-path the SPA is served under (also the Vite `base`) | `/sysadmin/` |
+| `AUTH_COOKIE_PATH` | prod | Path scope for the auth cookie | `/sysadmin` |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` / `DB_HOST` / `DB_PORT` | yes | ERP database (`default`) | `fusionlab` / … |
+| `SYSTEM_DB_NAME` / `SYSTEM_DB_USER` / `SYSTEM_DB_PASSWORD` / `SYSTEM_DB_HOST` / `SYSTEM_DB_PORT` | yes | Tool database (`system_db`) | `fusion_system_db` / … |
+| `EMAIL_HOST_USER` | yes | Gmail address (SMTP) | `you@gmail.com` |
+| `EMAIL_HOST_PASSWORD` | yes | Gmail App Password | `abcd efgh ijkl mnop` |
+| `EMAIL_TEST_USER` | yes | Address for test emails / batch-mail test mode | `you@gmail.com` |
+| `EMAIL_PORT` / `EMAIL_USE_TLS` | no | SMTP port / TLS | `587` / `True` |
+| `EMAIL_TEST_MODE` / `EMAIL_TEST_COUNT` / `EMAIL_TEST_ARRAY` | no | Batch-mail test controls (`mail-batch`) | `1` / `1` / `"[]"` |
+| `TOKEN_TTL_HOURS` | no | Auth-token lifetime | `12` |
+| `REDIS_URL` | no | Shared login-throttle counter across workers | `redis://127.0.0.1:6379/0` |
+| `BACKUP_ENCRYPTION_KEY` | no | Fernet key to encrypt backup dumps at rest | `<fernet key>` |
 
-### `client\.env`
+> **Note:** `reset_password` emails the real user regardless of `EMAIL_TEST_MODE`; the
+> test-mode variables only affect the batch-mail (`mail-batch`) flow.
 
-| Variable | Description | Example |
-|---|---|---|
-| `VITE_BACKEND_URL` | Base URL of the Django backend | `http://127.0.0.1:8000` |
+The frontend needs no `.env` of its own for local dev — `npm run dev` serves the SPA and
+proxies `/api` to the backend at `http://localhost:8000` (see `client/vite.config.js`).
+`APP_BASE_PATH` (root `.env`) controls the build's base path.
