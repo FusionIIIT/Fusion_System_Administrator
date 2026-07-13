@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
-import { Button, Divider, Grid, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Button, Grid, Group, NumberInput, Paper, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { notifications } from "@mantine/notifications";
 import { addSingleStudent } from "../../../api/UpcomingBatches";
@@ -32,6 +32,7 @@ const ManualEntryForm = ({ config, academicYear, onSubmitted, onCancel }) => {
       required: field.required,
       value: form[field.key] ?? "",
       withAsterisk: field.required,
+      size: "md",
     };
 
     let input;
@@ -90,13 +91,12 @@ const ManualEntryForm = ({ config, academicYear, onSubmitted, onCancel }) => {
   };
 
   return (
-    <Stack>
+    <Stack gap="md">
       {MANUAL_SECTIONS.map((section) => (
-        <div key={section.title}>
-          <Title order={6} mb="xs">{section.title}</Title>
-          <Grid>{section.fields.map(renderField)}</Grid>
-          <Divider mt="md" />
-        </div>
+        <Paper key={section.title} withBorder p="md" radius="md">
+          <Title order={6} mb="sm">{section.title}</Title>
+          <Grid gutter="md">{section.fields.map(renderField)}</Grid>
+        </Paper>
       ))}
       <Text size="xs" c="dimmed">
         Batch is derived from the discipline and category. A matching running batch must exist for the selected year.

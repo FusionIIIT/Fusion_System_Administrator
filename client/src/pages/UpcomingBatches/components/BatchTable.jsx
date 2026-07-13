@@ -1,13 +1,16 @@
 /* eslint-disable react/prop-types */
-import { Badge, Button, Group, Table, Text } from "@mantine/core";
+import { Badge, Button, Center, Group, Stack, Table, Text } from "@mantine/core";
 import { FaEye, FaTrash } from "react-icons/fa";
 
 const BatchTable = ({ batches, onView, onDelete }) => {
   if (!batches.length) {
     return (
-      <Text ta="center" c="dimmed" py="xl">
-        No batches for this category. Create one to get started.
-      </Text>
+      <Center py="xl">
+        <Stack gap={4} align="center">
+          <Text fw={500} c="dimmed">No batches for this category</Text>
+          <Text size="sm" c="dimmed">Create one to get started.</Text>
+        </Stack>
+      </Center>
     );
   }
 
@@ -37,8 +40,10 @@ const BatchTable = ({ batches, onView, onDelete }) => {
               </Table.Td>
               <Table.Td>
                 <Group gap="xs">
-                  <Badge color="blue" variant="light">{batch.filled_seats} filled</Badge>
-                  <Badge color="teal" variant="light">{batch.available_seats} left</Badge>
+                  <Badge color="teal" variant="light">{batch.filled_seats} filled</Badge>
+                  <Badge color={batch.available_seats > 0 ? "green" : "gray"} variant="light">
+                    {batch.available_seats} left
+                  </Badge>
                   <Text size="xs" c="dimmed">/ {batch.total_seats}</Text>
                 </Group>
               </Table.Td>

@@ -125,128 +125,104 @@ const CreateCustomRolePage = () => {
 
   return (
     <Container size="lg">
-      <PageHeader title="Create Custom Role" />
+      <PageHeader
+        title="Create Custom Role"
+        subtitle="Define a new designation and its type for the institute."
+      />
 
-      <Stack
-        spacing="xl"
-        align="center"
-        style={{
-          maxWidth: "600px",
-          width: "100%",
-          margin: "0 auto",
-        }}
-      >
-        {/* Form with Progress Bar */}
-        <Card
-          padding="lg"
-          withBorder
-          style={{
-            maxWidth: "500px",
-            width: "100%",
-          }}
-        >
-          <Progress
-            value={progress}
-            size="lg"
-            color={progress < 50 ? "red" : progress < 75 ? "orange" : "teal"}
+      <Card padding="lg" withBorder radius="lg" maw={640} mx="auto">
+        <Progress
+          value={progress}
+          size="sm"
+          radius="xl"
+          color={progress < 50 ? "red" : progress < 75 ? "orange" : "teal"}
+        />
+
+        <Stack gap="lg" mt="lg">
+          <TextInput
+            label="Role Name"
+            name="name"
+            placeholder="Enter role name"
+            value={roleDetails.name}
+            onChange={handleChange}
+            required
+            size="md"
+            radius="md"
           />
 
-          <Stack spacing="lg" mt="lg">
-            <TextInput
-              label="Role Name"
-              name="name"
-              placeholder="Enter role name"
-              value={roleDetails.name}
-              onChange={handleChange}
-              required
-              radius="md"
-              styles={(theme) => ({
-                input: {
-                  border: `2px solid ${theme.colors.gray[4]}`,
-                },
-              })}
-            />
+          <TextInput
+            label="Full Name"
+            name="full_name"
+            placeholder="Enter full name of the role"
+            value={roleDetails.full_name}
+            onChange={handleChange}
+            required
+            size="md"
+            radius="md"
+          />
 
-            <TextInput
-              label="Full Name"
-              name="full_name"
-              placeholder="Enter full name of the role"
-              value={roleDetails.full_name}
-              onChange={handleChange}
-              required
-              radius="md"
-              styles={(theme) => ({
-                input: {
-                  border: `2px solid ${theme.colors.gray[4]}`,
-                },
-              })}
-            />
+          <Select
+            label="Type"
+            name="type"
+            placeholder="Select type of the role"
+            value={roleDetails.type}
+            onChange={(value) => setRoleDetails({ ...roleDetails, type: value })}
+            size="md"
+            data={[
+              { value: 'academic', label: 'Academic Designation' },
+              { value: 'administrative', label: 'Administrative Designation' },
+            ]}
+          />
 
-            <Select
-              label="Type"
-              name="type"
-              placeholder="Select type of the role"
-              value={roleDetails.type}
-              onChange={(value) => setRoleDetails({ ...roleDetails, type: value })}
-              data={[
-                { value: 'academic', label: 'Academic Designation' },
-                { value: 'administrative', label: 'Administrative Designation' },
-              ]}
-            />
+          <Select
+            label="Basic"
+            name="basic"
+            placeholder="Select whether the role is basic"
+            value={roleDetails.basic ? "true" : "false"}
+            onChange={(value) => setRoleDetails({ ...roleDetails, basic: value=="true"? true: false })}
+            size="md"
+            data={[
+              { value: "false", label: 'False' },
+              { value: "true", label: 'True' },
+            ]}
+          />
 
-            <Select
-              label="Basic"
-              name="basic"
-              placeholder="Select whether the role is basic"
-              value={roleDetails.basic ? "true" : "false"}
-              onChange={(value) => setRoleDetails({ ...roleDetails, basic: value=="true"? true: false })}
-              data={[
-                { value: "false", label: 'False' },
-                { value: "true", label: 'True' },
-              ]}
-            />
-
-            <Button
-              ref={submitButtonRef}
-              color="blue"
-              onClick={() => setIsOpen(true)}
-              fullWidth
-              mt="md"
-            >
+          <Group justify="flex-end" mt="sm">
+            <Button ref={submitButtonRef} onClick={() => setIsOpen(true)}>
               Create Role
             </Button>
-          </Stack>
-        </Card>
-
-        {/* Confirmation Modal */}
-        <Modal
-          opened={isOpen}
-          onClose={() => setIsOpen(false)}
-          title="Confirm Role Creation"
-        >
-          <Text>Are you sure you want to create this custom role?</Text>
-          <Group position="right" mt="md">
-            <Button variant="default" onClick={() => setIsOpen(false)}>
-              Cancel
-            </Button>
-            <Button ref={confirmButtonRef} color="blue" onClick={handleSubmit}>
-              Confirm
-            </Button>
           </Group>
-        </Modal>
+        </Stack>
+      </Card>
 
-        {/* Validation Modal for empty fields */}
-        <Modal
-          opened={validationModalOpen}
-          onClose={() => setValidationModalOpen(false)}
-          title="Incomplete Fields"
-        >
-          <Text>You need to fill in all the fields before submitting the form.</Text>
-          <Group position="right" mt="md">
-            <Button onClick={() => setValidationModalOpen(false)}>OK</Button>
-          </Group>
-        </Modal>
-      </Stack>
+      {/* Confirmation Modal */}
+      <Modal
+        opened={isOpen}
+        onClose={() => setIsOpen(false)}
+        title="Confirm Role Creation"
+      >
+        <Text>Are you sure you want to create this custom role?</Text>
+        <Group justify="flex-end" mt="md">
+          <Button variant="default" onClick={() => setIsOpen(false)}>
+            Cancel
+          </Button>
+          <Button ref={confirmButtonRef} onClick={handleSubmit}>
+            Confirm
+          </Button>
+        </Group>
+      </Modal>
+
+      {/* Validation Modal for empty fields */}
+      <Modal
+        opened={validationModalOpen}
+        onClose={() => setValidationModalOpen(false)}
+        title="Incomplete Fields"
+      >
+        <Text>You need to fill in all the fields before submitting the form.</Text>
+        <Group justify="flex-end" mt="md">
+          <Button onClick={() => setValidationModalOpen(false)}>OK</Button>
+        </Group>
+      </Modal>
     </Container>
   );
 };

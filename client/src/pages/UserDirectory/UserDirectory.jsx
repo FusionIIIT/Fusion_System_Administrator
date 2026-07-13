@@ -10,6 +10,7 @@ import {
   TextInput,
   MultiSelect,
   Grid,
+  Group,
   Loader,
   Paper,
   Center,
@@ -22,23 +23,15 @@ import PageHeader from "../../components/PageHeader/PageHeader";
 
 const InfoCard = React.memo(function InfoCard({ person }) {
   return (
-  <Card
-    shadow="sm"
-    radius="xl"
-    withBorder
-    p="lg"
-    style={{
-      borderColor: "#e0e0e0",
-      backgroundColor: "#fdfdfd",
-      transition: "background-color 0.2s ease",
-    }}
-    className="info-card"
-    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f2f2f2")}
-    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fdfdfd")}
-  >
-    <Text fw={600} size="lg" mb="xs">
-      {person.full_name}
-    </Text>
+  <Card shadow="xs" radius="md" withBorder p="lg">
+    <Group justify="space-between" align="flex-start" wrap="nowrap" mb="xs">
+      <Text fw={600} size="lg">
+        {person.full_name}
+      </Text>
+      <Badge variant="light" radius="sm">
+        {person.user_type}
+      </Badge>
+    </Group>
     <Text size="sm" c="dimmed">
       <strong>Username:</strong> {person.username}
     </Text>
@@ -58,9 +51,14 @@ const InfoCard = React.memo(function InfoCard({ person }) {
         <Text size="sm">
           <strong>Semester:</strong> {person.curr_semester_no}
         </Text>
-        <Text size="sm">
-          <strong>Category:</strong> {person.category}
-        </Text>
+        <Group gap="xs" mt={4} mb={4}>
+          <Text size="sm">
+            <strong>Category:</strong>
+          </Text>
+          <Badge variant="light" color="grape" radius="sm">
+            {person.category}
+          </Badge>
+        </Group>
         <Text size="sm">
           <strong>Gender:</strong> {person.gender}
         </Text>
@@ -88,11 +86,13 @@ const InfoCard = React.memo(function InfoCard({ person }) {
         <Text size="sm" mb="xs">
           <strong>Designations:</strong>
         </Text>
-        {person.designations.map((role, idx) => (
-          <Badge key={idx} color="indigo" variant="light" radius="md" mr={5}>
-            {role}
-          </Badge>
-        ))}
+        <Group gap="xs">
+          {person.designations.map((role, idx) => (
+            <Badge key={idx} color="indigo" variant="light" radius="sm">
+              {role}
+            </Badge>
+          ))}
+        </Group>
       </>
     )}
   </Card>
@@ -234,15 +234,17 @@ const UserDirectory = () => {
 
   return (
     <Container size="xl">
-      <PageHeader title="User Directory" subtitle="Search students, faculty and staff" />
+      <PageHeader
+        title="User Directory"
+        subtitle="Search and filter students, faculty and staff across the institute"
+      />
 
-      <Paper shadow="sm" p="xl" radius="lg" withBorder>
+      <Paper p="lg" radius="lg" withBorder>
         <Tabs
           value={activeTab}
           onChange={setActiveTab}
           variant="pills"
-          radius="lg"
-          color="blue"
+          radius="md"
           keepMounted={false}
         >
           <Tabs.List grow mb="lg">
@@ -258,7 +260,7 @@ const UserDirectory = () => {
                   <TextInput
                     size="md"
                     radius="md"
-                    placeholder="🔍 Search by name or username"
+                    placeholder="Search by name or username"
                     onChange={(e) => handleSearchChange(e.currentTarget.value)}
                   />
                 </Grid.Col>
@@ -267,7 +269,7 @@ const UserDirectory = () => {
                   <Grid.Col span={6} key={idx}>
                     <MultiSelect
                       label={filterKey[0].toUpperCase() + filterKey.slice(1)}
-                      size="sm"
+                      size="md"
                       placeholder={`Filter by ${filterKey}`}
                       radius="md"
                       value={filters[filterKey]}
@@ -290,20 +292,24 @@ const UserDirectory = () => {
 
               {loading || filtering ? (
                 <Center h={200}>
-                  <Loader size="md" color="blue" />
+                  <Loader size="md" />
                 </Center>
               ) : !hasActiveQuery ? (
-                <Text align="center" c="dimmed">
-                  Search by name or username, or apply a filter, to view users.
-                </Text>
+                <Center h={200}>
+                  <Text ta="center" c="dimmed" size="sm">
+                    Search by name or username, or apply a filter, to view users.
+                  </Text>
+                </Center>
               ) : filteredData.length > 0 ? (
                 <ScrollArea h={500} offsetScrollbars>
                   <VirtualList />
                 </ScrollArea>
               ) : (
-                <Text align="center" c="dimmed">
-                  No users found.
-                </Text>
+                <Center h={200}>
+                  <Text ta="center" c="dimmed" size="sm">
+                    No users found.
+                  </Text>
+                </Center>
               )}
             </Tabs.Panel>
           ))}

@@ -8,10 +8,10 @@ import {
     Title,
     Modal,
     Button,
-    Flex,
     Checkbox,
-    Center,
     Grid,
+    Card,
+    Text,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { users } from '../../data/users';
@@ -101,113 +101,71 @@ const DeleteUserPage = () => {
 
     return (
         <Container size="lg">
-            <PageHeader title="Delete Users" />
+            <PageHeader
+                title="Delete Users"
+                subtitle="Search, select and permanently remove user accounts from the system."
+            />
 
-            <Grid style={{ display: 'flex', alignItems: 'stretch' }}>
-                <Grid.Col span={12} style={{ display: 'flex' }}>
-                    <Container
-                        style={{
-                            backgroundColor: '#f8f9fa',
-                            padding: '1rem',
-                            border: '2px solid #ababab',
-                            borderRadius: '15px',
-                            flex: 1,
-                        }}
-                    >
-                        <Simple title={'User Batch Data'} colors={colors} data={userBatchData} />
-                    </Container>
-                </Grid.Col>
-            </Grid>
+            <Card padding="lg" withBorder radius="lg" mb="lg">
+                <Simple title={'User Batch Data'} colors={colors} data={userBatchData} />
+            </Card>
 
-            <Box mt={10}>
-                <Group position="center" mb={5}>
+            <Card padding="lg" withBorder radius="lg">
+                <Group justify="center" mb="lg">
                     <TextInput
                         placeholder="Search by name, role, roll no, etc."
                         value={searchTerm}
                         onChange={handleSearch}
-                        styles={{
-                            root: {
-                                marginLeft: 'auto',
-                                marginRight: 'auto',
-                                width: '400px',
-                            },
-                            input: {
-                                marginLeft: 'auto',
-                                marginRight: 'auto',
-                                backgroundColor: 'white',
-                                borderRadius: '50px',
-                                boxShadow: 'xl',
-                                '&:hover': { boxShadow: '2xl' },
-                                '&:focus': { borderColor: 'lightcoral' },
-                            },
-                        }}
+                        size="md"
+                        w={400}
                     />
                 </Group>
 
-                <Center>
-                    <Grid>
-                        {filteredUsers.map((user) => (
-                            <Grid.Col span={6} key={user.id}>
-                                <Flex
-                                    mb={5}
-                                    align="center"
-                                    style={{
-                                        backgroundColor: 'white',
-                                        padding: '10px',
-                                        borderRadius: '8px',
-                                        border: '2px solid #f0f0f0',
-                                    }}
-                                >
+                <Grid>
+                    {filteredUsers.map((user) => (
+                        <Grid.Col span={{ base: 12, sm: 6 }} key={user.id}>
+                            <Card withBorder radius="md" padding="sm">
+                                <Group align="flex-start" wrap="nowrap">
                                     <Checkbox
                                         checked={selectedUsers.includes(user.id)}
                                         onChange={() => toggleSelectUsers(user.id)}
-                                        styles={{
-                                            input: {
-                                                cursor: 'pointer',
-                                                width: '20px',
-                                                height: '20px',
-                                            },
-                                        }}
+                                        styles={{ input: { cursor: 'pointer' } }}
                                     />
-                                    <Box ml={10} style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>{user.name}</div>
-                                        <div style={{ marginLeft: '10px', fontSize: '0.9rem' }}>{user.rollNo}</div>
-                                        <div style={{ marginLeft: '10px', fontSize: '0.8rem' }}>{user.role}</div>
+                                    <Box style={{ flex: 1 }}>
+                                        <Text fw={600}>{user.name}</Text>
+                                        <Text size="sm" c="dimmed">{user.rollNo}</Text>
+                                        <Text size="xs" c="dimmed">{user.role}</Text>
                                     </Box>
-                                </Flex>
-                            </Grid.Col>
-                        ))}
-                    </Grid>
-                </Center>
+                                </Group>
+                            </Card>
+                        </Grid.Col>
+                    ))}
+                </Grid>
 
-                <Center mt={5}>
-                    <Group mt={5}>
-                        <Button
-                            gradient={{ from: 'lightyellow', to: 'red' }}
-                            color="coral"
-                            onClick={handleDelete}
-                            disabled={selectedUsers.length === 0} // Disable if no users are selected
-                        >
-                            Delete Selected
-                        </Button>
-                    </Group>
-                </Center>
+                <Group justify="flex-end" mt="lg">
+                    <Button
+                        color="red"
+                        onClick={handleDelete}
+                        disabled={selectedUsers.length === 0} // Disable if no users are selected
+                    >
+                        Delete Selected
+                    </Button>
+                </Group>
+            </Card>
 
-                <Modal opened={opened} onClose={close} title="Confirm Action">
-                    <Modal.Body>
-                        Are you sure you want to delete the selected users? This action cannot be undone.
-                    </Modal.Body>
-                    <center>
-                        <Button color="blue" onClick={confirmDelete} mr="10">
-                            Proceed
-                        </Button>
-
-                        <Button variant="outline" onClick={close}>
-                            Cancel
-                        </Button>
-                    </center>
-                </Modal>
-            </Box>
+            <Modal opened={opened} onClose={close} title="Confirm Action">
+                <Modal.Body>
+                    Are you sure you want to delete the selected users? This action cannot be undone.
+                </Modal.Body>
+                <Group justify="flex-end" mt="md">
+                    <Button variant="default" onClick={close}>
+                        Cancel
+                    </Button>
+                    <Button color="red" onClick={confirmDelete}>
+                        Proceed
+                    </Button>
+                </Group>
+            </Modal>
         </Container>
     );
 };

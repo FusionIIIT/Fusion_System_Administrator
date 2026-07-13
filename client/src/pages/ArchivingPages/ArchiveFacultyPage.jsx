@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 import {
     Tabs, Card, Text, ScrollArea, Container, Title,
     Button, TextInput, MultiSelect, Grid, Paper,
-    Divider, Checkbox, Group, Modal,
+    Divider, Checkbox, Group, Badge, Center, Modal,
     rem
 } from "@mantine/core";
 import { debounce } from "lodash";
@@ -105,14 +105,21 @@ const STATIC_FACULTY = [
 ];
 
 const InfoCard = ({ person, selectable, selected, onSelectChange }) => (
-    <Card shadow="sm" radius="xl" withBorder p="lg" style={{ backgroundColor: "#fdfdfd" }}>
-        <Group position="apart" align="flex-start">
+    <Card shadow="xs" radius="md" withBorder p="lg">
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
             <div style={{ flex: 1 }}>
-                <Text fw={600} size="lg" mb="xs">{person.full_name}</Text>
+                <Group gap="xs" align="center" mb="xs">
+                    <Text fw={600} size="lg">{person.full_name}</Text>
+                    <Badge variant="light" radius="sm">{person.department}</Badge>
+                </Group>
                 <Text size="sm" c="dimmed"><strong>Username:</strong> {person.username}</Text>
                 <Divider my="sm" />
-                <Text size="sm"><strong>Department:</strong> {person.department}</Text>
-                <Text size="sm"><strong>Designation:</strong> {person.designations.join(', ')}</Text>
+                <Text size="sm" mb="xs"><strong>Designation:</strong></Text>
+                <Group gap="xs" mb="xs">
+                    {person.designations.map((role, idx) => (
+                        <Badge key={idx} color="indigo" variant="light" radius="sm">{role}</Badge>
+                    ))}
+                </Group>
                 <Text size="sm"><strong>Gender:</strong> {person.gender}</Text>
             </div>
             {selectable && (
@@ -187,11 +194,14 @@ const ArchiveFacultyPage = () => {
     };
 
     return (
-        <Container size="lg">
-            <PageHeader title="Archive Faculty" />
+        <Container size="xl">
+            <PageHeader
+                title="Archive Faculty"
+                subtitle="Move faculty members who have left the institute to the archive"
+            />
 
-            <Paper shadow="lg" p="xl" radius="xl" withBorder>
-                <Tabs value={activeTab} onChange={setActiveTab} variant="pills" color="blue" radius="lg" keepMounted={false}>
+            <Paper p="lg" radius="lg" withBorder>
+                <Tabs value={activeTab} onChange={setActiveTab} variant="pills" radius="md" keepMounted={false}>
                     <Tabs.List grow mb="lg">
                         <Tabs.Tab value="archive">ARCHIVE</Tabs.Tab>
                         <Tabs.Tab value="archived">ARCHIVED</Tabs.Tab>
@@ -201,7 +211,8 @@ const ArchiveFacultyPage = () => {
                         <Grid mb="lg">
                             <Grid.Col span={12}>
                                 <TextInput
-                                    placeholder="🔍 Search faculty"
+                                    placeholder="Search faculty"
+                                    size="md"
                                     radius="md"
                                     onChange={(e) => handleSearchChange(e.currentTarget.value)}
                                 />
@@ -214,6 +225,7 @@ const ArchiveFacultyPage = () => {
                                         value={filters[key]}
                                         onChange={(value) => setFilters((prev) => ({ ...prev, [key]: value }))}
                                         data={extractUnique(STATIC_FACULTY, key)}
+                                        size="md"
                                         radius="md"
                                         searchable
                                         clearable
@@ -228,23 +240,31 @@ const ArchiveFacultyPage = () => {
                         </Group>
 
                         <ScrollArea h={400}>
-                            <Grid>
-                                {filteredData.map((faculty) => (
-                                    <Grid.Col span={12} key={faculty.username}>
-                                        <InfoCard
-                                            person={faculty}
-                                            selectable
-                                            selected={isSelected(faculty.username)}
-                                            onSelectChange={toggleSelect}
-                                        />
-                                    </Grid.Col>
-                                ))}
-                            </Grid>
+                            {filteredData.length > 0 ? (
+                                <Grid>
+                                    {filteredData.map((faculty) => (
+                                        <Grid.Col span={12} key={faculty.username}>
+                                            <InfoCard
+                                                person={faculty}
+                                                selectable
+                                                selected={isSelected(faculty.username)}
+                                                onSelectChange={toggleSelect}
+                                            />
+                                        </Grid.Col>
+                                    ))}
+                                </Grid>
+                            ) : (
+                                <Center h={200}>
+                                    <Text ta="center" c="dimmed" size="sm">
+                                        No faculty match your search or filters.
+                                    </Text>
+                                </Center>
+                            )}
                         </ScrollArea>
 
                         {selectedUsernames.length > 0 && (
-                            <Group mt="lg" position="right">
-                                <Button color="blue" onClick={() => setModalOpened(true)}>Archive</Button>
+                            <Group mt="lg" justify="flex-end">
+                                <Button onClick={() => setModalOpened(true)}>Archive</Button>
                             </Group>
                         )}
                     </Tabs.Panel>
@@ -268,9 +288,9 @@ const ArchiveFacultyPage = () => {
                 title="Confirm Archive"
             >
                 <Text size="sm">Are you sure you want to archive the selected faculty members?</Text>
-                <Group position="right" mt="md">
-                    <Button variant="outline" onClick={() => setModalOpened(false)}>Cancel</Button>
-                    <Button color="blue" onClick={handleArchive}>Confirm</Button>
+                <Group justify="flex-end" mt="md">
+                    <Button variant="default" onClick={() => setModalOpened(false)}>Cancel</Button>
+                    <Button onClick={handleArchive}>Confirm</Button>
                 </Group>
             </Modal>
         </Container>

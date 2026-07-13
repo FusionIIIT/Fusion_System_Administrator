@@ -42,6 +42,7 @@ const StudentListModal = ({ opened, onClose, batch }) => {
         leftSection={<FaSearch size={12} />}
         value={query}
         onChange={(e) => setQuery(e.currentTarget.value)}
+        size="md"
       />
       {loading ? (
         <Center h={200}><Loader /></Center>

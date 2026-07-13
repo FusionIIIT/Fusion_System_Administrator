@@ -1,19 +1,17 @@
 import { useState, useEffect } from "react";
 import {
-  Box,
   Button,
   Text,
   Stack,
-  Flex,
-  Grid,
   Modal,
   Select,
   Group,
   rem,
   Container,
-  Divider,
   Checkbox,
   Loader,
+  Card,
+  SimpleGrid,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import axiosInstance from "../../context/axiosInstance";
@@ -119,73 +117,65 @@ const ManageRoleAccessPage = () => {
   };
 
   return (
-    <Container size="lg">
-      <PageHeader title="Manage Role Access" />
+    <Container size="xl">
+      <PageHeader
+        title="Manage Role Access"
+        subtitle="Control which modules each role can access across the system."
+      />
 
-      <Flex direction={{ base: "column", lg: "row" }} >
-        {/* Form Section */}
-        <Box w="100%" md:w="50%" pl="lg">
-          <Stack spacing="1rem">
-            <Select
-              label="Select Role"
-              placeholder="Choose a role"
-              searchable
-              data={roles}
-              value={roleName}
-              onChange={setRoleName}
-              required
-            />
+      {/* Role selection */}
+      <Card padding="lg" withBorder radius="lg" mb="lg">
+        <Stack gap="md">
+          <Select
+            label="Select Role"
+            placeholder="Choose a role"
+            searchable
+            data={roles}
+            value={roleName}
+            onChange={setRoleName}
+            required
+            size="md"
+          />
 
-            <Button mt="md" onClick={fetchModuleAccess}>
+          <Group justify="flex-start">
+            <Button onClick={fetchModuleAccess}>
               Fetch module access information
             </Button>
+          </Group>
+        </Stack>
+      </Card>
 
-            <Divider my="md" />
+      {loading && (
+        <Group justify="center" my="xl">
+          <Loader size="lg" />
+        </Group>
+      )}
 
-            {loading && (
-              <Flex justify="center" mt="md">
-                <Loader size="lg" />
-              </Flex>
-            )}
-          </Stack>
-          {moduleAccess && (
-            <>
-              <Text
-                fontSize="xl"
-                fontWeight="bold"
-                align="center"
-                color="blue" // You can choose any color value
-                mb="md" // Adds space to the bottom (margin-bottom)
-              >
-                Manage module access for {roleName}
-              </Text>
+      {/* Module access grid */}
+      {moduleAccess && (
+        <Card padding="lg" withBorder radius="lg">
+          <Text fw={600} size="lg" mb="md">
+            Manage module access for {roleName}
+          </Text>
 
-              <Grid>
-                {Object.keys(moduleAccess).filter((module) => module !== "designation" && module !== "id").map((module) => (
-                  <Grid.Col
-                    key={module}
-                    span={{ base: 12, sm: 6, md: 4 }}
-                  >
-                    <Checkbox
-                      label={module.replace(/_/g, " ").toUpperCase()}
-                      checked={moduleAccess[module]}
-                      onChange={() => handleModuleChange(module)}
-                    />
-                  </Grid.Col>
-                ))}
-              </Grid>
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+            {Object.keys(moduleAccess).filter((module) => module !== "designation" && module !== "id").map((module) => (
+              <Checkbox
+                key={module}
+                label={module.replace(/_/g, " ").toUpperCase()}
+                checked={moduleAccess[module]}
+                onChange={() => handleModuleChange(module)}
+              />
+            ))}
+          </SimpleGrid>
 
-              <Flex align="center" justify="center" mt="md">
-                <Button color="blue" onClick={() => setIsOpen(true)}>
-                  Confirm changes
-                </Button>
-              </Flex>
-
-            </>
-          )}
-
-        </Box>
-      </Flex>
+          <Group justify="flex-end" mt="xl">
+            <Button onClick={() => setIsOpen(true)}>
+              Confirm changes
+            </Button>
+          </Group>
+        </Card>
+      )}
 
       {/* Confirmation Modal */}
       <Modal
@@ -194,11 +184,11 @@ const ManageRoleAccessPage = () => {
         title="Confirm changes"
       >
         <Text>Are you sure you want to update the role access for {roleName} ?</Text>
-        <Group position="right" mt="md">
+        <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={() => setIsOpen(false)}>
             Cancel
           </Button>
-          <Button color="blue" onClick={handleSubmit}>
+          <Button onClick={handleSubmit}>
             Confirm
           </Button>
         </Group>
