@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
 import { Button, Center, Group, Loader, Modal, Paper, Select, Text, TextInput } from "@mantine/core";
-import { FaPlus, FaSearch, FaUserPlus } from "react-icons/fa";
+import { FaFilter, FaPlus, FaSearch, FaUserPlus } from "react-icons/fa";
 import { notifications } from "@mantine/notifications";
 import { deleteBatch as deleteBatchApi } from "../../../api/UpcomingBatches";
 import BatchTable from "./BatchTable";
@@ -11,7 +11,7 @@ import StudentListModal from "./StudentListModal";
 
 const BatchSection = ({ config, batches, disciplines, curriculums, loading, refresh }) => {
   const [search, setSearch] = useState("");
-  const [targetYear, setTargetYear] = useState(String(config.yearOptions[0]));
+  const [filterYear, setFilterYear] = useState("all");
   const [addBatchOpen, setAddBatchOpen] = useState(false);
   const [addStudentsOpen, setAddStudentsOpen] = useState(false);
   const [viewBatch, setViewBatch] = useState(null);
@@ -19,15 +19,24 @@ const BatchSection = ({ config, batches, disciplines, curriculums, loading, refr
   const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
+    let list = batches;
+    if (filterYear !== "all") list = list.filter((b) => String(b.year) === filterYear);
     const term = search.trim().toLowerCase();
-    if (!term) return batches;
-    return batches.filter(
-      (b) =>
-        b.name.toLowerCase().includes(term) ||
-        b.discipline.toLowerCase().includes(term) ||
-        String(b.year).includes(term),
-    );
-  }, [batches, search]);
+    if (term) {
+      list = list.filter(
+        (b) =>
+          b.name.toLowerCase().includes(term) ||
+          b.discipline.toLowerCase().includes(term) ||
+          String(b.year).includes(term),
+      );
+    }
+    return list;
+  }, [batches, search, filterYear]);
+
+  const yearOptions = [
+    { value: "all", label: "All years" },
+    ...config.yearOptions.map((y) => ({ value: String(y), label: String(y) })),
+  ];
 
   const confirmDelete = async () => {
     setDeleting(true);
@@ -59,12 +68,12 @@ const BatchSection = ({ config, batches, disciplines, curriculums, loading, refr
         />
         <Group>
           <Select
-            label={null}
-            data={config.yearOptions.map(String)}
-            value={targetYear}
-            onChange={setTargetYear}
-            w={120}
-            aria-label="Target year"
+            leftSection={<FaFilter size={12} />}
+            data={yearOptions}
+            value={filterYear}
+            onChange={(value) => setFilterYear(value || "all")}
+            w={150}
+            aria-label="Filter by year"
           />
           <Button variant="light" leftSection={<FaPlus size={12} />} onClick={() => setAddBatchOpen(true)}>
             Add Batch
@@ -93,7 +102,6 @@ const BatchSection = ({ config, batches, disciplines, curriculums, loading, refr
         opened={addStudentsOpen}
         onClose={() => setAddStudentsOpen(false)}
         config={config}
-        academicYear={targetYear}
         onSaved={refresh}
       />
       <StudentListModal opened={!!viewBatch} onClose={() => setViewBatch(null)} batch={viewBatch} />

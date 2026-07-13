@@ -16,6 +16,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { users } from '../../data/users';
 import { BarChart } from '@mantine/charts';
+import PageHeader from '../../components/PageHeader/PageHeader';
 
 function Simple({ title, data, colors, datakey }) {
     return (
@@ -99,38 +100,8 @@ const DeleteUserPage = () => {
     });
 
     return (
-        <Container fluid my="md">
-            <Flex
-                direction={{ base: 'column', sm: 'row' }}
-                gap={{ base: 'sm', sm: 'lg' }}
-                justify={{ sm: 'center' }}
-                mb={'1rem'}
-            >
-                <Button
-                    variant="gradient"
-                    size="xl"
-                    radius="xs"
-                    gradient={{ from: 'red', to: 'orange', deg: 90 }}
-                    sx={{
-                        display: 'block',
-                        width: { base: '100%', sm: 'auto' },
-                        whiteSpace: 'normal',
-                        padding: '1rem',
-                        textAlign: 'center',
-                    }}
-                >
-                    <Title
-                        order={1}
-                        sx={{
-                            fontSize: { base: 'lg', sm: 'xl' },
-                            lineHeight: 1.2,
-                            wordBreak: 'break-word',
-                        }}
-                    >
-                        Delete Users
-                    </Title>
-                </Button>
-            </Flex>
+        <Container size="lg">
+            <PageHeader title="Delete Users" />
 
             <Grid style={{ display: 'flex', alignItems: 'stretch' }}>
                 <Grid.Col span={12} style={{ display: 'flex' }}>

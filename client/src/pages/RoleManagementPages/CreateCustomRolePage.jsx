@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  Box,
   Button,
   Text,
   Stack,
   Modal,
   Group,
-  Title,
-  Flex,
+  Container,
+  Card,
   TextInput,
   Progress,
   rem,
@@ -15,8 +14,8 @@ import {
 } from "@mantine/core";
 import { FaCheck, FaTimes } from 'react-icons/fa';
 import { notifications } from '@mantine/notifications';
-import { useMediaQuery } from "@mantine/hooks";
 import { createCustomRole } from "../../api/Roles";
+import PageHeader from "../../components/PageHeader/PageHeader";
 
 function getProgress(inputs) {
   const filledInputs = inputs.filter((input) => input.length > 0);
@@ -39,8 +38,6 @@ const CreateCustomRolePage = () => {
   const [validationModalOpen, setValidationModalOpen] = useState(false);
   const submitButtonRef = useRef(null);
   const confirmButtonRef = useRef(null);
-
-  const matches = useMediaQuery('(min-width: 768px)');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -127,41 +124,8 @@ const CreateCustomRolePage = () => {
   }, [isOpen]);
 
   return (
-    <Box
-      p="lg"
-      style={{
-        backgroundColor: "#f7f7f7",
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        flexDirection: "column",
-        gap: "5rem",
-      }}
-    >
-      {/* Title Button */}
-      <Button
-        variant="gradient"
-        size="xl"
-        radius="xs"
-        gradient={{ from: "blue", to: "cyan", deg: 90 }}
-        w={matches && "500px"}
-        style={{
-          fontSize: "1.8rem",
-          lineHeight: 1.2,
-          marginBottom: "1rem",  // Space below the button
-        }}
-      >
-        <Title
-          order={1}
-          align="center"
-          style={{
-            fontSize: "1.25rem",
-            wordBreak: "break-word",
-          }}
-        >
-          Create Custom Role
-        </Title>
-      </Button>
+    <Container size="lg">
+      <PageHeader title="Create Custom Role" />
 
       <Stack
         spacing="xl"
@@ -169,21 +133,16 @@ const CreateCustomRolePage = () => {
         style={{
           maxWidth: "600px",
           width: "100%",
-          padding: "1rem",
+          margin: "0 auto",
         }}
       >
         {/* Form with Progress Bar */}
-        <Flex
-          direction="column"
-          gap="lg"
-          p="xl"
+        <Card
+          padding="lg"
+          withBorder
           style={{
-            border: "2px solid #ccc",
-            borderRadius: "10px",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
             maxWidth: "500px",
             width: "100%",
-            padding: "1.5rem",
           }}
         >
           <Progress
@@ -192,7 +151,7 @@ const CreateCustomRolePage = () => {
             color={progress < 50 ? "red" : progress < 75 ? "orange" : "teal"}
           />
 
-          <Stack spacing="lg">
+          <Stack spacing="lg" mt="lg">
             <TextInput
               label="Role Name"
               name="name"
@@ -257,7 +216,7 @@ const CreateCustomRolePage = () => {
               Create Role
             </Button>
           </Stack>
-        </Flex>
+        </Card>
 
         {/* Confirmation Modal */}
         <Modal
@@ -288,7 +247,7 @@ const CreateCustomRolePage = () => {
           </Group>
         </Modal>
       </Stack>
-    </Box>
+    </Container>
   );
 };
 

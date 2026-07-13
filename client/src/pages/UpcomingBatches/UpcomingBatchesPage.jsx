@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Container, Flex, Tabs, Title } from "@mantine/core";
+import { Container, Tabs } from "@mantine/core";
 import { useBatches } from "./hooks/useBatches";
+import PageHeader from "../../components/PageHeader/PageHeader";
 import UGBatches from "./components/UGBatches";
 import PGBatches from "./components/PGBatches";
 import PhDBatches from "./components/PhDBatches";
@@ -18,10 +19,8 @@ const UpcomingBatchesPage = () => {
   const ActiveSection = SECTIONS[active];
 
   return (
-    <Container size="xl" py="xl">
-      <Flex justify="center" mb="lg">
-        <Title order={2}>Upcoming Batches</Title>
-      </Flex>
+    <Container size="xl">
+      <PageHeader title="Upcoming Batches" subtitle="Admit and manage UG, PG and PhD batches" />
 
       <Tabs value={active} onChange={setActive} variant="pills" radius="lg" keepMounted={false}>
         <Tabs.List grow mb="lg">

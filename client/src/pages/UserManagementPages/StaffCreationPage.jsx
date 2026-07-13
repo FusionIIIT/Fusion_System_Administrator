@@ -5,11 +5,10 @@ import {
     Button,
     Grid,
     Group,
-    Box,
+    Container,
     NumberInput,
     Radio,
     rem,
-    Title,
     Divider,
     Progress,
     Flex,
@@ -18,9 +17,9 @@ import {
 import { FaCheck, FaTimes } from 'react-icons/fa';
 import { showNotification } from '@mantine/notifications';
 import { DateInput } from '@mantine/dates';
-import { useMediaQuery } from "@mantine/hooks";
 import { getAllDesignations, getAllDepartments } from '../../api/Roles';
 import { createStaff } from '../../api/Users';
+import PageHeader from '../../components/PageHeader/PageHeader';
 
 const StaffCreationPage = () => {
     const xIcon = <FaTimes style={{ width: rem(20), height: rem(20) }} />;
@@ -165,44 +164,10 @@ const StaffCreationPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formValues]);
 
-    const matches = useMediaQuery('(min-width: 768px)');
-
     return (
-        <Box maw={700} mx="auto" p="lg" shadow="sm" withBorder>
+        <Container size="lg">
+            <PageHeader title="Add Staff" />
             <Paper shadow="xl" radius="lg" p="xl">
-                <Flex
-                    gap="md"
-                    justify="center"
-                    align="center"
-                    direction="row"
-                    wrap="wrap"
-                >
-
-                    <Button
-                        variant="gradient"
-                        size="xl"
-                        radius="xs"
-                        gradient={{ from: "blue", to: "cyan", deg: 90 }}
-                        w={matches && "500px"}
-                        style={{
-                            fontSize: "1.8rem",
-                            lineHeight: 1.2,
-                            marginBottom: "1rem",
-                        }}
-                    >
-                        <Title
-                            order={1}
-                            align="center"
-                            style={{
-                                fontSize: "1.25rem",
-                                wordBreak: "break-word",
-                            }}
-                        >
-                            Add Staff
-                        </Title>
-                    </Button>
-                </Flex>
-
                 <Divider my="sm" />
 
                 {/* Progress Bar */}
@@ -338,7 +303,7 @@ const StaffCreationPage = () => {
                     </Button>
                 </Flex>
             </Paper>
-        </Box>
+        </Container>
     );
 };
 

@@ -2,13 +2,14 @@
 import { useState, useMemo } from "react";
 import {
     Tabs, Card, Text, ScrollArea, Container, Title,
-    Flex, Button, TextInput, MultiSelect, Grid, Paper,
+    Button, TextInput, MultiSelect, Grid, Paper,
     Divider, Checkbox, Group, Modal,
     rem
 } from "@mantine/core";
 import { debounce } from "lodash";
 import { FaCheck } from "react-icons/fa";
 import { showNotification } from "@mantine/notifications";
+import PageHeader from "../../components/PageHeader/PageHeader";
 
 const STATIC_FACULTY = [
     {
@@ -186,25 +187,8 @@ const ArchiveFacultyPage = () => {
     };
 
     return (
-        <Container size="lg" py="xl">
-            <Flex
-                direction={{ base: 'column', sm: 'row' }}
-                gap={{ base: 'sm', sm: 'lg' }}
-                justify={{ sm: 'center' }}
-                mb="xl"
-            >
-                <Button
-                    variant="gradient"
-                    size="xl"
-                    radius="xs"
-                    gradient={{ from: 'blue', to: 'cyan', deg: 90 }}
-                    sx={{ display: 'block', width: { base: '100%', sm: 'auto' }, whiteSpace: 'normal', padding: '1rem', textAlign: 'center' }}
-                >
-                    <Title order={1} sx={{ fontSize: { base: 'lg', sm: 'xl' }, lineHeight: 1.2, wordBreak: 'break-word' }}>
-                        Archive Faculty
-                    </Title>
-                </Button>
-            </Flex>
+        <Container size="lg">
+            <PageHeader title="Archive Faculty" />
 
             <Paper shadow="lg" p="xl" radius="xl" withBorder>
                 <Tabs value={activeTab} onChange={setActiveTab} variant="pills" color="blue" radius="lg" keepMounted={false}>

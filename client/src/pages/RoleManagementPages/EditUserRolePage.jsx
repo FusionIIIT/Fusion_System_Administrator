@@ -9,12 +9,12 @@ import {
   rem,
   TextInput,
   MultiSelect,
-  Title,
+  Container,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import axiosInstance from "../../context/axiosInstance";
-import { useMediaQuery } from "@mantine/hooks";
 import { FaCheck, FaTimes } from 'react-icons/fa';
+import PageHeader from "../../components/PageHeader/PageHeader";
 
 const EditUserRolePage = () => {
   const [username, setUsername] = useState("");
@@ -117,47 +117,9 @@ const EditUserRolePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
-  const matches = useMediaQuery('(min-width: 768px)');
-
   return (
-    <Box
-      style={{
-        backgroundColor: "#f0f0f0",
-        minHeight: "100vh",
-        padding: "1rem",
-      }}
-    >
-      {/* Title Button */}
-      <Flex
-        justify="center"
-        align="center"
-        style={{
-          marginBottom: "2rem",
-        }}
-      >
-        <Button
-          variant="gradient"
-          size="xl"
-          radius="xs"
-          gradient={{ from: "blue", to: "cyan", deg: 90 }}
-          w={matches && "500px"}
-          style={{
-            fontSize: "1.8rem",
-            lineHeight: 1.2,
-          }}
-        >
-          <Title
-            order={1}
-            align="center"
-            style={{
-              fontSize: "1.25rem",
-              wordBreak: "break-word",
-            }}
-          >
-            {"Edit User's Role"}
-          </Title>
-        </Button>
-      </Flex>
+    <Container size="lg">
+      <PageHeader title="Edit User's Role" />
 
       <Flex
         direction={{ base: "column", lg: "row" }}
@@ -330,7 +292,7 @@ const EditUserRolePage = () => {
           </Button>
         </Flex>
       </Modal>
-    </Box>
+    </Container>
   );
 };
 

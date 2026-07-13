@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
+  Container,
   Paper,
   Title,
   Text,
@@ -42,6 +43,7 @@ import {
   fetchRestores,
   getRestoreStatus,
 } from "../../api/Backups";
+import PageHeader from "../../components/PageHeader/PageHeader";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -476,16 +478,8 @@ const BackupPage = () => {
   }
 
   return (
-    <Box p="xl" maw={1100} mx="auto">
-      {/* Header */}
-      <Flex align="center" justify="space-between" mb="xl" wrap="wrap" gap="md">
-        <Flex align="center" gap="sm">
-          <FaDatabase size={28} color="#228be6" />
-          <Title order={2} style={{ color: "#1c7ed6" }}>
-            Database Backups
-          </Title>
-        </Flex>
-      </Flex>
+    <Container size="xl">
+      <PageHeader title="Backup Management" />
 
       <Flex gap="xl" align="flex-start" wrap="wrap">
         {/* ── Left panel: database list ── */}
@@ -967,7 +961,7 @@ const BackupPage = () => {
           </Button>
         </Flex>
       </Modal>
-    </Box>
+    </Container>
   );
 };
 
