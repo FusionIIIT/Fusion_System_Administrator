@@ -63,7 +63,7 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
 
   return (
     <Modal opened={opened} onClose={onClose} title={`Add ${config.label} Batch`} centered>
-      <Stack>
+      <Stack gap="md">
         <Select
           label="Programme"
           placeholder="Select programme"
@@ -73,6 +73,7 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
             setProgramme(value);
             setDisciplineId(null);
           }}
+          size="md"
           required
         />
         <Select
@@ -82,6 +83,7 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
           value={disciplineId}
           onChange={setDisciplineId}
           disabled={!programme}
+          size="md"
           searchable
           required
         />
@@ -90,15 +92,17 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
           data={config.yearOptions.map(String)}
           value={year}
           onChange={setYear}
+          size="md"
           required
         />
-        <NumberInput label="Total Seats" min={1} value={totalSeats} onChange={setTotalSeats} required />
+        <NumberInput label="Total Seats" min={1} value={totalSeats} onChange={setTotalSeats} size="md" required />
         <Select
           label="Curriculum (optional)"
           placeholder="Assign a working curriculum"
           data={curriculumOptions}
           value={curriculumId}
           onChange={setCurriculumId}
+          size="md"
           searchable
           clearable
         />

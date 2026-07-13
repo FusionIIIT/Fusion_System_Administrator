@@ -12,9 +12,10 @@ const AddStudentsModal = ({ opened, onClose, config, onSaved }) => {
 
   return (
     <Modal opened={opened} onClose={onClose} size="80%" title={`Add ${config.label} Students`}>
-      <Stack>
-        <Group justify="space-between" align="flex-end">
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-end" wrap="wrap" gap="sm">
           <SegmentedControl
+            size="md"
             value={mode}
             onChange={setMode}
             data={[
@@ -27,7 +28,8 @@ const AddStudentsModal = ({ opened, onClose, config, onSaved }) => {
             data={config.yearOptions.map(String)}
             value={academicYear}
             onChange={(value) => setAcademicYear(value || String(config.yearOptions[0]))}
-            w={140}
+            size="md"
+            w={160}
           />
         </Group>
         <Text size="xs" c="dimmed">

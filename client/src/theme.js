@@ -4,7 +4,7 @@ const SANS =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 export const theme = createTheme({
-  primaryColor: "indigo",
+  primaryColor: "blue",
   primaryShade: { light: 6, dark: 5 },
   fontFamily: SANS,
   headings: { fontFamily: SANS, fontWeight: "600" },

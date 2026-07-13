@@ -1,15 +1,20 @@
 import { useState, useEffect } from "react";
 import {
-  Box,
   Button,
   Text,
   Stack,
   Modal,
-  Flex,
   rem,
   TextInput,
   MultiSelect,
   Container,
+  Card,
+  Grid,
+  Group,
+  Badge,
+  Divider,
+  ScrollArea,
+  Paper,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import axiosInstance from "../../context/axiosInstance";
@@ -119,162 +124,125 @@ const EditUserRolePage = () => {
 
   return (
     <Container size="lg">
-      <PageHeader title="Edit User's Role" />
+      <PageHeader
+        title="Edit User's Role"
+        subtitle="Look up a user and manage the roles assigned to their account."
+      />
 
-      <Flex
-        direction={{ base: "column", lg: "row" }}
-        style={{
-          gap: "2rem",
-          justifyContent: "center",
-        }}
-      >
-        {/* First Section - Username Input */}
-        <Box style={{ width: "100%", flex: 1 }}>
-          <Stack spacing="1rem">
-            <TextInput
-              label="Username"
-              placeholder="Enter username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-            <Button onClick={fetchUserAndRoleDetails}>Fetch User Details</Button>
-          </Stack>
-
-          {userDetails && (
-            <Box
-              style={{
-                width: "100%",
-                padding: "1rem",
-                marginTop: "1rem",
-                borderRadius: "8px",
-                boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.1)",
-                position: "relative",
-                backgroundColor: "white",
-              }}
-            >
-              {/* Status Label at the top right */}
-              <Box
-                style={{
-                  position: "absolute",
-                  top: "0.5rem",
-                  right: "0.5rem",
-                  backgroundColor: userDetails.is_active ? "green" : "red",
-                  color: "white",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                }}
-              >
-                {userDetails.is_active ? "Active" : "Non-Active"}
-              </Box>
-
-              {/* User Details */}
-              <Stack spacing="1rem">
-                <Text style={{ fontSize: "1.1rem", fontWeight: "bold" }}>
-                  Name: {userDetails.first_name}
-                </Text>
-                <Text style={{ fontSize: "1.1rem", fontWeight: "bold" }}>Roll No: {userDetails.username}</Text>
-
-                {/* Display formatted date joined */}
-                <Text style={{ fontSize: "1.1rem", fontWeight: "bold" }}>
-                  Date Joined: {new Date(userDetails.date_joined).toLocaleDateString(undefined, {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </Text>
-              </Stack>
-            </Box>
-          )}
-        </Box>
-
-        {/* Second Section - Current Roles and New Role Selection */}
-        <Box
-          style={{
-            width: "100%",
-            flex: 1,
-            padding: "1rem",
-            backgroundColor: "#fff",
-            borderRadius: "8px",
-            boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.1)",
-            maxHeight: "400px",
-          }}
-        >
-          {loading ? (
-            <Text>Loading roles...</Text>
-          ) : userDetails ? (
-            <Box>
-              <Text style={{ fontSize: "1.25rem", fontWeight: "bold" }}>Current Roles:</Text>
-              {/* Scrollable roles section */}
-              <Box
-                style={{
-                  maxHeight: "200px",
-                  overflowY: "auto",
-                  paddingRight: "1rem",
-                }}
-              >
-                <Stack spacing="sm">
-                  {currentRoles.map((role) => (
-                    <Flex
-                      key={role}
-                      justify={"space-between"}
-                      align={"center"}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        borderRadius: "4px",
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                        transition: "background-color 0.2s",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = "#f0f0f0";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "transparent";
-                      }}
-                    >
-                      <Text>{role.name}{role.basic ? "(Base)" : ""}</Text>
-                      <Button
-                        variant="outline"
-                        color="red"
-                        disabled={role.basic}
-                        onClick={() => handleRemoveRole(role)}
-                      >
-                        Remove
-                      </Button>
-                    </Flex>
-                  ))}
-                </Stack>
-              </Box>
-
-              {/* Non-scrollable section */}
-              <MultiSelect
-                label="Add new role"
-                placeholder="Select roles"
-                data={roles.map((role) => ({
-                  value: role.name,
-                  label: `${role.name}${role.basic ? "(Base)" : ""}`,
-                }))}
-                value={newRoles}
-                onChange={setNewRoles}
-                searchable
-                clearable
+      <Grid gutter="lg">
+        {/* User lookup and details */}
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card padding="lg" withBorder radius="lg">
+            <Stack gap="md">
+              <TextInput
+                label="Username"
+                placeholder="Enter username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                size="md"
               />
+              <Button onClick={fetchUserAndRoleDetails}>Fetch User Details</Button>
+            </Stack>
 
-              <Button
-                color="blue"
-                onClick={() => setIsOpen(true)}
-                mt="1rem"
-                fullWidth
-              >
-                Confirm Changes
-              </Button>
-            </Box>
-          ) : (
-            <Text>No user details found</Text>
-          )}
-        </Box>
-      </Flex>
+            {userDetails && (
+              <>
+                <Divider my="lg" />
+
+                <Group justify="space-between" mb="sm">
+                  <Text fw={600} size="lg">
+                    User Details
+                  </Text>
+                  <Badge
+                    size="lg"
+                    variant="light"
+                    color={userDetails.is_active ? "green" : "red"}
+                  >
+                    {userDetails.is_active ? "Active" : "Non-Active"}
+                  </Badge>
+                </Group>
+
+                <Stack gap="xs">
+                  <Text>
+                    <Text span fw={600}>Name: </Text>
+                    {userDetails.first_name}
+                  </Text>
+                  <Text>
+                    <Text span fw={600}>Roll No: </Text>
+                    {userDetails.username}
+                  </Text>
+                  <Text>
+                    <Text span fw={600}>Date Joined: </Text>
+                    {new Date(userDetails.date_joined).toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </Text>
+                </Stack>
+              </>
+            )}
+          </Card>
+        </Grid.Col>
+
+        {/* Current roles and new role selection */}
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Card padding="lg" withBorder radius="lg">
+            {loading ? (
+              <Text c="dimmed">Loading roles...</Text>
+            ) : userDetails ? (
+              <Stack gap="md">
+                <Text fw={600} size="lg">
+                  Current Roles
+                </Text>
+
+                <ScrollArea.Autosize mah={220}>
+                  <Stack gap="xs">
+                    {currentRoles.map((role) => (
+                      <Paper key={role.name} withBorder radius="md" p="xs">
+                        <Group justify="space-between" wrap="nowrap">
+                          <Text fw={500}>
+                            {role.name}{role.basic ? "(Base)" : ""}
+                          </Text>
+                          <Button
+                            variant="outline"
+                            color="red"
+                            size="xs"
+                            disabled={role.basic}
+                            onClick={() => handleRemoveRole(role)}
+                          >
+                            Remove
+                          </Button>
+                        </Group>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </ScrollArea.Autosize>
+
+                <MultiSelect
+                  label="Add new role"
+                  placeholder="Select roles"
+                  data={roles.map((role) => ({
+                    value: role.name,
+                    label: `${role.name}${role.basic ? "(Base)" : ""}`,
+                  }))}
+                  value={newRoles}
+                  onChange={setNewRoles}
+                  searchable
+                  clearable
+                  size="md"
+                />
+
+                <Button onClick={() => setIsOpen(true)} fullWidth>
+                  Confirm Changes
+                </Button>
+              </Stack>
+            ) : (
+              <Text c="dimmed">No user details found</Text>
+            )}
+          </Card>
+        </Grid.Col>
+      </Grid>
 
       {/* Confirmation Modal */}
       <Modal
@@ -283,14 +251,14 @@ const EditUserRolePage = () => {
         title="Confirm Changes"
       >
         <Text>Are you sure you want to update the user roles?</Text>
-        <Flex justify="flex-end" gap="1rem" mt="1rem">
+        <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={() => setIsOpen(false)}>
             Cancel
           </Button>
-          <Button color="blue" onClick={handleSubmit}>
+          <Button onClick={handleSubmit}>
             Confirm
           </Button>
-        </Flex>
+        </Group>
       </Modal>
     </Container>
   );

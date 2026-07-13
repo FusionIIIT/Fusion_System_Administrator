@@ -9,10 +9,10 @@ import {
     NumberInput,
     Radio,
     rem,
-    Divider,
     Progress,
-    Flex,
-    Paper,
+    Card,
+    Text,
+    Divider,
 } from '@mantine/core';
 import { FaCheck, FaTimes } from 'react-icons/fa';
 import { showNotification } from '@mantine/notifications';
@@ -173,69 +173,76 @@ const FacultyCreationPage = () => {
 
     return (
         <Container size="lg">
-            <PageHeader title="Add Faculty" />
-            <Paper shadow="xl" radius="lg" p="xl">
-                <Divider my="sm" />
+            <PageHeader
+                title="Add Faculty"
+                subtitle="Create a new faculty account with department, designation and personal details."
+            />
+            <Card padding="lg" withBorder radius="lg">
+                <Progress value={progress} size="sm" radius="xl" mb="lg" />
 
-                {/* Progress Bar */}
-                <Progress value={progress} color="blue" mb="md" />
-
+                <Text fw={700} size="xs" tt="uppercase" c="dimmed" mt="md" mb={4}>
+                    Identity
+                </Text>
+                <Divider mb="md" />
                 <Grid gutter="md">
-                    <Grid.Col span={12}>
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                             label="Username"
                             placeholder="Enter username(20 letters)"
                             value={formValues.username}
                             onChange={(e) => handleChange('username', e.target.value)}
                             required
+                            size="md"
                         />
                     </Grid.Col>
-                    {/* First Name */}
-                    <Grid.Col span={6}>
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                             label="First Name"
                             placeholder="Enter first name"
                             value={formValues.first_name}
                             onChange={(e) => handleChange('first_name', e.target.value)}
                             required
+                            size="md"
                         />
                     </Grid.Col>
-
-                    {/* Last Name */}
-                    <Grid.Col span={6}>
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                             label="Last Name"
                             placeholder="Enter last name"
                             value={formValues.last_name}
                             onChange={(e) => handleChange('last_name', e.target.value)}
                             required
+                            size="md"
                         />
                     </Grid.Col>
-
-                    {/* Department */}
-                    <Grid.Col span={12}>
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <Select
                             label="Department"
                             placeholder="Enter department"
                             data={departments}
                             value={`${formValues.department}`}
                             onChange={(value) => handleChange('department', Number(value))}
+                            size="md"
                         />
                     </Grid.Col>
+                </Grid>
 
-                    {/* Title */}
-                    <Grid.Col span={6}>
+                <Text fw={700} size="xs" tt="uppercase" c="dimmed" mt="md" mb={4}>
+                    Details
+                </Text>
+                <Divider mb="md" />
+                <Grid gutter="md">
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <Select
                             label="Title"
                             placeholder="Select title"
                             data={['Dr.', 'Mr.', 'Mrs.', 'Ms.']}
                             value={formValues.title}
                             onChange={(value) => handleChange('title', value)}
+                            size="md"
                         />
                     </Grid.Col>
-
-                    {/* Designation */}
-                    <Grid.Col span={6}>
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <Select
                             label="Designation"
                             placeholder="Select designation"
@@ -243,10 +250,9 @@ const FacultyCreationPage = () => {
                             value={`${formValues.designation}`}
                             onChange={(value) => handleChange('designation', Number(value))}
                             required
+                            size="md"
                         />
                     </Grid.Col>
-
-                    {/* Gender */}
                     <Grid.Col span={12}>
                         <Radio.Group
                             label="Gender"
@@ -264,52 +270,49 @@ const FacultyCreationPage = () => {
                             </Group>
                         </Radio.Group>
                     </Grid.Col>
+                </Grid>
 
-                    {/* Date of Birth */}
-                    <Grid.Col span={6}>
+                <Text fw={700} size="xs" tt="uppercase" c="dimmed" mt="md" mb={4}>
+                    Contact
+                </Text>
+                <Divider mb="md" />
+                <Grid gutter="md">
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <DateInput
                             value={formValues.dob}
                             onChange={(value) => handleChange('dob', value)}
                             label="Date of Birth"
                             placeholder="Pick a date"
+                            size="md"
                         />
                     </Grid.Col>
-
-                    {/* Phone Number */}
-                    <Grid.Col span={6}>
+                    <Grid.Col span={{ base: 12, sm: 6 }}>
                         <NumberInput
                             label="Phone Number"
                             placeholder="Enter phone number"
                             value={formValues.phone}
                             onChange={(value) => handleChange('phone', value)}
                             hideControls
+                            size="md"
                         />
                     </Grid.Col>
-
                     <Grid.Col span={12}>
                         <TextInput
                             label="Address"
                             placeholder="Enter address"
                             value={formValues.address}
                             onChange={(e) => handleChange('address', e.target.value)}
+                            size="md"
                         />
                     </Grid.Col>
                 </Grid>
 
-                {/* Create Button */}
-                <Flex
-                    gap="md"
-                    justify="center"
-                    align="center"
-                    direction="row"
-                    wrap="wrap"
-                    mt="xl"
-                >
-                    <Button onClick={handleSubmit} color="blue" size="md">
+                <Group justify="flex-end" mt="lg">
+                    <Button onClick={handleSubmit} size="md">
                         Add Faculty
                     </Button>
-                </Flex>
-            </Paper>
+                </Group>
+            </Card>
         </Container>
     );
 };

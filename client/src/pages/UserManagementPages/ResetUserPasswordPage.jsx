@@ -1,20 +1,19 @@
 import { useState } from 'react';
 import {
     Container,
-    Paper,
+    Card,
     Button,
-    Flex,
+    Group,
     Text,
     Stack,
     rem,
     Modal,
     TextInput,
-    Divider,
 } from '@mantine/core';
 
 import { showNotification } from '@mantine/notifications';
 import '@mantine/notifications/styles.css';
-import { FaCheck, FaTimes, FaDiceD6 } from 'react-icons/fa';
+import { FaCheck, FaTimes } from 'react-icons/fa';
 import { resetPassword } from '../../api/Users';
 import PageHeader from '../../components/PageHeader/PageHeader';
 
@@ -79,27 +78,18 @@ const ResetUserPasswordPage = () => {
 
     return (
         <Container size="lg">
-            <PageHeader title="Reset Password" />
-
-
-            <Divider
-                my="xs"
-                labelPosition="center"
-                label={
-                    <>
-                        <FaDiceD6 size={12} />
-                    </>
-                }
+            <PageHeader
+                title="Reset Password"
+                subtitle="Generate a new password for a user; it is emailed directly to them."
             />
 
-
-            <Paper
-                p="lg"
+            <Card
+                padding="lg"
                 withBorder
-                radius="md"
+                radius="lg"
                 style={{
                     width: '100%',
-                    maxWidth: '600px',
+                    maxWidth: '480px',
                     margin: '0 auto',
                 }}
             >
@@ -112,6 +102,7 @@ const ResetUserPasswordPage = () => {
                             value={formData.username}
                             onChange={handleChange}
                             required
+                            size="md"
                         />
 
                         {errorMessage && (
@@ -119,17 +110,15 @@ const ResetUserPasswordPage = () => {
                                 {errorMessage}
                             </Text>
                         )}
+                    </Stack>
 
-                        <Button
-                            style={{ background: 'light-blue', color: 'white' }}
-                            onClick={openConfirmationDialog}
-                            fullWidth
-                        >
+                    <Group justify="flex-end" mt="lg">
+                        <Button onClick={openConfirmationDialog} size="md">
                             Reset Password
                         </Button>
-                    </Stack>
+                    </Group>
                 </form>
-            </Paper>
+            </Card>
 
             {/* Confirmation Modal */}
             <Modal
@@ -140,14 +129,14 @@ const ResetUserPasswordPage = () => {
                 <Text>
                     Are you sure you want to reset the password for {formData.username}?
                 </Text>
-                <Flex justify="flex-end" mt="md">
-                    <Button variant="outline" onClick={() => setOpened(false)}>
+                <Group justify="flex-end" mt="md">
+                    <Button variant="default" onClick={() => setOpened(false)}>
                         Cancel
                     </Button>
-                    <Button color="blue" onClick={handleSubmit} ml="sm">
+                    <Button onClick={handleSubmit}>
                         Confirm
                     </Button>
-                </Flex>
+                </Group>
             </Modal>
         </Container>
     );

@@ -8,6 +8,7 @@ import {
   Text,
   Button,
   Badge,
+  Checkbox,
   Table,
   ScrollArea,
   Flex,
@@ -197,6 +198,9 @@ const BackupPage = () => {
   const [restoreModal, setRestoreModal] = useState({ open: false, id: null });
   const [deleting, setDeleting] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const pollTimerRef = useRef(null);
   const restorePollTimerRef = useRef(null);
@@ -234,6 +238,7 @@ const BackupPage = () => {
     try {
       const data = await fetchBackups(selectedDb);
       setBackups(Array.isArray(data) ? data : []);
+      setSelected(new Set());
     } catch {
       setBackups([]);
     } finally {
@@ -409,6 +414,11 @@ const BackupPage = () => {
     try {
       await apiDeleteBackup(deleteModal.id);
       setBackups((prev) => prev.filter((b) => b.id !== deleteModal.id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteModal.id);
+        return next;
+      });
       showNotification({
         title: "Backup deleted",
         message: "The backup has been removed.",
@@ -426,6 +436,40 @@ const BackupPage = () => {
       setDeleting(false);
       setDeleteModal({ open: false, id: null });
     }
+  };
+
+  const toggleSelected = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const selectableIds = backups
+    .filter((b) => b.status !== "in_progress")
+    .map((b) => b.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  const someSelected = selectableIds.some((id) => selected.has(id));
+
+  const toggleSelectAll = () =>
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    const ids = [...selected];
+    const results = await Promise.allSettled(ids.map((id) => apiDeleteBackup(id)));
+    const deletedIds = ids.filter((_, i) => results[i].status === "fulfilled");
+    const failed = ids.length - deletedIds.length;
+    setBackups((prev) => prev.filter((b) => !deletedIds.includes(b.id)));
+    setSelected(new Set());
+    setBulkDeleting(false);
+    setBulkDeleteModal(false);
+    showNotification({
+      title: failed ? "Partly deleted" : "Backups deleted",
+      message: `${deletedIds.length} backup${deletedIds.length === 1 ? "" : "s"} deleted${failed ? `, ${failed} failed` : ""}.`,
+      color: failed ? "yellow" : "red",
+      position: "top-center",
+    });
   };
 
   const handleRestore = async () => {
@@ -741,14 +785,8 @@ const BackupPage = () => {
           </Paper>
 
           {/* Backups table */}
-          <Paper shadow="md" radius="lg" p="lg" withBorder>
-            <Flex
-              justify="space-between"
-              align="center"
-              mb="md"
-              wrap="wrap"
-              gap="sm"
-            >
+          <Paper shadow="sm" radius="lg" p="lg" withBorder>
+            <Flex justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
               <Flex align="center" gap="sm">
                 <Title order={4}>Backups</Title>
                 <Tooltip label="Refresh" withArrow>
@@ -762,110 +800,123 @@ const BackupPage = () => {
                   </ActionIcon>
                 </Tooltip>
               </Flex>
-              <Button
-                leftIcon={<FaDatabase size={14} />}
-                color="blue"
-                radius="md"
-                loading={makingBackup}
-                onClick={handleMakeBackup}
-                disabled={!selectedDb}
-              >
-                Make backup right now
-              </Button>
+              <Group gap="sm">
+                {selected.size > 0 && (
+                  <Button
+                    color="red"
+                    variant="light"
+                    radius="md"
+                    leftSection={<FaTrash size={13} />}
+                    onClick={() => setBulkDeleteModal(true)}
+                  >
+                    Delete {selected.size} selected
+                  </Button>
+                )}
+                <Button
+                  leftSection={<FaDatabase size={14} />}
+                  radius="md"
+                  loading={makingBackup}
+                  onClick={handleMakeBackup}
+                  disabled={!selectedDb}
+                >
+                  Make backup right now
+                </Button>
+              </Group>
             </Flex>
 
             <Divider mb="md" />
 
             {loadingBackups ? (
               <Center h={200}>
-                <Loader size="md" color="blue" />
+                <Loader size="md" />
               </Center>
             ) : (
-              <ScrollArea>
-                <Table
-                  highlightOnHover
-                  verticalSpacing="sm"
-                  horizontalSpacing="md"
-                >
-                  <thead>
-                    <tr>
-                      <th style={{ whiteSpace: "nowrap" }}>Created at</th>
-                      <th style={{ whiteSpace: "nowrap" }}>Status</th>
-                      <th style={{ whiteSpace: "nowrap" }}>Size</th>
-                      <th style={{ whiteSpace: "nowrap" }}>Duration</th>
-                      <th style={{ whiteSpace: "nowrap" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <Table.ScrollContainer minWidth={760}>
+                <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th w={40}>
+                        <Checkbox
+                          aria-label="Select all backups"
+                          checked={allSelected}
+                          indeterminate={someSelected && !allSelected}
+                          onChange={toggleSelectAll}
+                          disabled={selectableIds.length === 0}
+                        />
+                      </Table.Th>
+                      <Table.Th>Created at</Table.Th>
+                      <Table.Th>Status</Table.Th>
+                      <Table.Th>Size</Table.Th>
+                      <Table.Th>Duration</Table.Th>
+                      <Table.Th>Actions</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
                     {backups.length === 0 && (
-                      <tr>
-                        <td colSpan={5}>
+                      <Table.Tr>
+                        <Table.Td colSpan={6}>
                           <Center py="xl">
-                            <Text color="dimmed">
-                              No backups yet. Click &quot;Make backup right
-                              now&quot; to create one.
+                            <Text c="dimmed">
+                              No backups yet. Click &quot;Make backup right now&quot; to create one.
                             </Text>
                           </Center>
-                        </td>
-                      </tr>
+                        </Table.Td>
+                      </Table.Tr>
                     )}
                     {backups.map((b) => {
                       const { date, time, relative } = fmtDate(b.created_at);
                       // System database is backup-only; the backend rejects a
                       // restore of it, so hide the option here too.
                       const dbRestorable =
-                        databases.find((d) => d.id === b.db_name)?.restorable !==
-                        false;
+                        databases.find((d) => d.id === b.db_name)?.restorable !== false;
                       return (
-                        <tr key={b.id}>
-                          <td>
+                        <Table.Tr
+                          key={b.id}
+                          bg={selected.has(b.id) ? "var(--mantine-color-blue-light)" : undefined}
+                        >
+                          <Table.Td>
+                            <Checkbox
+                              aria-label="Select backup"
+                              checked={selected.has(b.id)}
+                              onChange={() => toggleSelected(b.id)}
+                              disabled={b.status === "in_progress"}
+                            />
+                          </Table.Td>
+                          <Table.Td>
                             <Text size="sm" fw={500}>
                               {date} {time}
                             </Text>
-                            <Text size="xs" color="dimmed">
+                            <Text size="xs" c="dimmed">
                               ({relative})
                             </Text>
-                          </td>
-                          <td>
+                          </Table.Td>
+                          <Table.Td>
                             <StatusBadge status={b.status} />
                             {b.status === "failed" && b.error_message && (
-                              <Tooltip
-                                label={b.error_message}
-                                withArrow
-                                multiline
-                                maw={300}
-                              >
-                                <Text
-                                  size="xs"
-                                  color="red"
-                                  style={{ cursor: "help" }}
-                                >
+                              <Tooltip label={b.error_message} withArrow multiline maw={300}>
+                                <Text size="xs" c="red" style={{ cursor: "help" }}>
                                   hover for details
                                 </Text>
                               </Tooltip>
                             )}
-                          </td>
-                          <td>
+                          </Table.Td>
+                          <Table.Td>
                             <Text size="sm">{fmtBytes(b.size_bytes)}</Text>
-                          </td>
-                          <td>
+                          </Table.Td>
+                          <Table.Td>
                             <Text size="sm">
-                              {b.status === "in_progress"
-                                ? "—"
-                                : fmtDuration(b.duration_ms)}
+                              {b.status === "in_progress" ? "—" : fmtDuration(b.duration_ms)}
                             </Text>
-                          </td>
-                          <td>
-                            <Group spacing={8}>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap={8} wrap="nowrap">
                               <Tooltip label="Delete backup" withArrow>
                                 <ActionIcon
                                   color="red"
                                   variant="light"
                                   radius="md"
                                   disabled={b.status === "in_progress"}
-                                  onClick={() =>
-                                    setDeleteModal({ open: true, id: b.id })
-                                  }
+                                  onClick={() => setDeleteModal({ open: true, id: b.id })}
                                 >
                                   <FaTrash size={14} />
                                 </ActionIcon>
@@ -883,25 +934,21 @@ const BackupPage = () => {
                                     color="blue"
                                     variant="light"
                                     radius="md"
-                                    disabled={
-                                      b.status !== "success" || !dbRestorable
-                                    }
-                                    onClick={() =>
-                                      setRestoreModal({ open: true, id: b.id })
-                                    }
+                                    disabled={b.status !== "success" || !dbRestorable}
+                                    onClick={() => setRestoreModal({ open: true, id: b.id })}
                                   >
                                     <FaUpload size={14} />
                                   </ActionIcon>
                                 </span>
                               </Tooltip>
                             </Group>
-                          </td>
-                        </tr>
+                          </Table.Td>
+                        </Table.Tr>
                       );
                     })}
-                  </tbody>
+                  </Table.Tbody>
                 </Table>
-              </ScrollArea>
+              </Table.ScrollContainer>
             )}
           </Paper>
         </Box>
@@ -929,6 +976,29 @@ const BackupPage = () => {
           </Button>
           <Button color="red" onClick={handleDelete} loading={deleting}>
             Delete
+          </Button>
+        </Flex>
+      </Modal>
+
+      {/* ── Bulk delete confirm modal ── */}
+      <Modal
+        opened={bulkDeleteModal}
+        onClose={() => setBulkDeleteModal(false)}
+        title="Delete selected backups"
+        centered
+        radius="md"
+      >
+        <Text size="sm" mb="xl">
+          Are you sure you want to delete <strong>{selected.size}</strong> selected backup
+          {selected.size === 1 ? "" : "s"}? This action cannot be undone — the backup files
+          will be permanently removed from disk.
+        </Text>
+        <Flex justify="space-between">
+          <Button variant="default" onClick={() => setBulkDeleteModal(false)} disabled={bulkDeleting}>
+            Cancel
+          </Button>
+          <Button color="red" onClick={handleBulkDelete} loading={bulkDeleting}>
+            Delete {selected.size}
           </Button>
         </Flex>
       </Modal>

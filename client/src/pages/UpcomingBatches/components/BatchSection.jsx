@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
-import { Button, Center, Group, Loader, Modal, Paper, Select, Text, TextInput } from "@mantine/core";
+import { Button, Center, Group, Loader, Modal, Paper, Select, Stack, Text, TextInput } from "@mantine/core";
 import { FaFilter, FaPlus, FaSearch, FaUserPlus } from "react-icons/fa";
 import { notifications } from "@mantine/notifications";
 import { deleteBatch as deleteBatchApi } from "../../../api/UpcomingBatches";
@@ -57,38 +57,44 @@ const BatchSection = ({ config, batches, disciplines, curriculums, loading, refr
   };
 
   return (
-    <Paper p="lg" radius="md" withBorder>
-      <Group justify="space-between" mb="md" wrap="wrap">
-        <TextInput
-          placeholder="Search batches"
-          leftSection={<FaSearch size={12} />}
-          value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          w={260}
-        />
-        <Group>
-          <Select
-            leftSection={<FaFilter size={12} />}
-            data={yearOptions}
-            value={filterYear}
-            onChange={(value) => setFilterYear(value || "all")}
-            w={150}
-            aria-label="Filter by year"
+    <Stack gap="md">
+      <Paper p="md" radius="md" withBorder>
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          <TextInput
+            placeholder="Search batches"
+            leftSection={<FaSearch size={12} />}
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            size="md"
+            w={280}
           />
-          <Button variant="light" leftSection={<FaPlus size={12} />} onClick={() => setAddBatchOpen(true)}>
-            Add Batch
-          </Button>
-          <Button leftSection={<FaUserPlus size={12} />} onClick={() => setAddStudentsOpen(true)}>
-            Add Students
-          </Button>
+          <Group gap="sm">
+            <Select
+              leftSection={<FaFilter size={12} />}
+              data={yearOptions}
+              value={filterYear}
+              onChange={(value) => setFilterYear(value || "all")}
+              size="md"
+              w={160}
+              aria-label="Filter by year"
+            />
+            <Button size="md" variant="light" leftSection={<FaPlus size={12} />} onClick={() => setAddBatchOpen(true)}>
+              Add Batch
+            </Button>
+            <Button size="md" leftSection={<FaUserPlus size={12} />} onClick={() => setAddStudentsOpen(true)}>
+              Add Students
+            </Button>
+          </Group>
         </Group>
-      </Group>
+      </Paper>
 
-      {loading ? (
-        <Center h={200}><Loader /></Center>
-      ) : (
-        <BatchTable batches={filtered} onView={setViewBatch} onDelete={setPendingDelete} />
-      )}
+      <Paper p={0} radius="md" withBorder>
+        {loading ? (
+          <Center h={200}><Loader /></Center>
+        ) : (
+          <BatchTable batches={filtered} onView={setViewBatch} onDelete={setPendingDelete} />
+        )}
+      </Paper>
 
       <AddBatchModal
         opened={addBatchOpen}
@@ -115,7 +121,7 @@ const BatchSection = ({ config, batches, disciplines, curriculums, loading, refr
           <Button color="red" onClick={confirmDelete} loading={deleting}>Delete</Button>
         </Group>
       </Modal>
-    </Paper>
+    </Stack>
   );
 };
 
