@@ -7,9 +7,6 @@ import {
   Badge,
   ScrollArea,
   Container,
-  Title,
-  Flex,
-  Button,
   TextInput,
   MultiSelect,
   Grid,
@@ -21,6 +18,7 @@ import {
 import { debounce } from "lodash";
 import { VariableSizeList as List } from "react-window";
 import { fetchUsersByType } from "../../api/Users.jsx";
+import PageHeader from "../../components/PageHeader/PageHeader";
 
 const InfoCard = React.memo(function InfoCard({ person }) {
   return (
@@ -235,40 +233,10 @@ const UserDirectory = () => {
   );
 
   return (
-    <Container size="lg" py="xl">
-      <Flex
-        direction={{ base: "column", sm: "row" }}
-        gap={{ base: "sm", sm: "lg" }}
-        justify={{ sm: "center" }}
-        mb="xl"
-      >
-        <Button
-          variant="gradient"
-          size="xl"
-          radius="xs"
-          gradient={{ from: "blue", to: "cyan", deg: 90 }}
-          sx={{
-            display: "block",
-            width: { base: "100%", sm: "auto" },
-            whiteSpace: "normal",
-            padding: "1rem",
-            textAlign: "center",
-          }}
-        >
-          <Title
-            order={1}
-            sx={{
-              fontSize: { base: "lg", sm: "xl" },
-              lineHeight: 1.2,
-              wordBreak: "break-word",
-            }}
-          >
-            User Directory
-          </Title>
-        </Button>
-      </Flex>
+    <Container size="xl">
+      <PageHeader title="User Directory" subtitle="Search students, faculty and staff" />
 
-      <Paper shadow="lg" p="xl" radius="xl" withBorder>
+      <Paper shadow="sm" p="xl" radius="lg" withBorder>
         <Tabs
           value={activeTab}
           onChange={setActiveTab}

@@ -16,7 +16,7 @@ export const CONFIG = Object.freeze({
   AUTH_SUCCESS_DELAY_MS: 400,
   SHAKE_DURATION_MS: 500,
   // Where to land after a successful login.
-  POST_LOGIN_ROUTE: "/UserDirectory",
+  POST_LOGIN_ROUTE: "/dashboard",
 });
 
 /** Brand palette — mirrors the main Fusion client so the two apps feel like one. */

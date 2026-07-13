@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Box,
+  Container,
   Paper,
   Title,
   Text,
@@ -46,6 +47,7 @@ import {
   previewNextRuns,
   fetchDatabases,
 } from "../../../api/Backups";
+import PageHeader from "../../../components/PageHeader/PageHeader";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -564,38 +566,34 @@ const SchedulePage = () => {
   }
 
   return (
-    <Box p="xl" maw={1000} mx="auto">
-      {/* Header */}
-      <Flex align="center" justify="space-between" mb="xl" wrap="wrap" gap="md">
-        <Flex align="center" gap="sm">
-          <FaClock size={26} color="#228be6" />
-          <Title order={2} style={{ color: "#1c7ed6" }}>
-            Backup Schedules
-          </Title>
-        </Flex>
-        <Group spacing="sm">
-          <Tooltip label="Refresh" withArrow>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size="lg"
-              onClick={load}
-              loading={loading}
+    <Container size="xl">
+      <PageHeader
+        title="Backup Schedules"
+        action={
+          <Group spacing="sm">
+            <Tooltip label="Refresh" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="lg"
+                onClick={load}
+                loading={loading}
+              >
+                <FaSync size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <Button
+              leftIcon={<FaPlus size={13} />}
+              color="blue"
+              radius="md"
+              onClick={() => setFormModal({ open: true, editing: null })}
+              disabled={databases.length === 0}
             >
-              <FaSync size={14} />
-            </ActionIcon>
-          </Tooltip>
-          <Button
-            leftIcon={<FaPlus size={13} />}
-            color="blue"
-            radius="md"
-            onClick={() => setFormModal({ open: true, editing: null })}
-            disabled={databases.length === 0}
-          >
-            New schedule
-          </Button>
-        </Group>
-      </Flex>
+              New schedule
+            </Button>
+          </Group>
+        }
+      />
 
       {databases.length === 0 && (
         <Alert
@@ -826,7 +824,7 @@ const SchedulePage = () => {
           </Button>
         </Flex>
       </Modal>
-    </Box>
+    </Container>
   );
 };
 

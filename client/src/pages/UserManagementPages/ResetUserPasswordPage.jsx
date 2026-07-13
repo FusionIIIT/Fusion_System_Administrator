@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
-    Box,
+    Container,
+    Paper,
     Button,
     Flex,
     Text,
@@ -8,7 +9,6 @@ import {
     rem,
     Modal,
     TextInput,
-    Title,
     Divider,
 } from '@mantine/core';
 
@@ -16,6 +16,7 @@ import { showNotification } from '@mantine/notifications';
 import '@mantine/notifications/styles.css';
 import { FaCheck, FaTimes, FaDiceD6 } from 'react-icons/fa';
 import { resetPassword } from '../../api/Users';
+import PageHeader from '../../components/PageHeader/PageHeader';
 
 const ResetUserPasswordPage = () => {
     const [formData, setFormData] = useState({
@@ -77,37 +78,8 @@ const ResetUserPasswordPage = () => {
     };
 
     return (
-        <Box style={{ background: '#f7f7f7', minHeight: '100vh', padding: '20px' }}>
-            <Flex
-                direction={{ base: 'column', sm: 'row' }}
-                gap={{ base: 'sm', sm: 'lg' }}
-                justify={{ sm: 'center' }}
-            >
-                <Button
-                    variant="gradient"
-                    size="xl"
-                    radius="xs"
-                    gradient={{ from: 'blue', to: 'cyan', deg: 90 }}
-                    sx={{
-                        display: 'block',
-                        width: { base: '100%', sm: 'auto' },
-                        whiteSpace: 'normal',
-                        padding: '1rem',
-                        textAlign: 'center',
-                    }}
-                >
-                    <Title
-                        order={1}
-                        sx={{
-                            fontSize: { base: 'lg', sm: 'xl' },
-                            lineHeight: 1.2,
-                            wordBreak: 'break-word',
-                        }}
-                    >
-                        Reset Password
-                    </Title>
-                </Button>
-            </Flex>
+        <Container size="lg">
+            <PageHeader title="Reset Password" />
 
 
             <Divider
@@ -121,12 +93,11 @@ const ResetUserPasswordPage = () => {
             />
 
 
-            <Box
+            <Paper
+                p="lg"
+                withBorder
+                radius="md"
                 style={{
-                    background: 'white',
-                    padding: '20px',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
                     width: '100%',
                     maxWidth: '600px',
                     margin: '0 auto',
@@ -158,7 +129,7 @@ const ResetUserPasswordPage = () => {
                         </Button>
                     </Stack>
                 </form>
-            </Box>
+            </Paper>
 
             {/* Confirmation Modal */}
             <Modal
@@ -178,7 +149,7 @@ const ResetUserPasswordPage = () => {
                     </Button>
                 </Flex>
             </Modal>
-        </Box>
+        </Container>
     );
 };
 

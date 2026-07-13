@@ -10,7 +10,7 @@ import {
   Select,
   Group,
   rem,
-  Title,
+  Container,
   Divider,
   Checkbox,
   Loader,
@@ -18,7 +18,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import axiosInstance from "../../context/axiosInstance";
 import { FaCheck, FaTimes } from 'react-icons/fa';
-import { useMediaQuery } from "@mantine/hooks";
+import PageHeader from "../../components/PageHeader/PageHeader";
 
 const ManageRoleAccessPage = () => {
 
@@ -118,40 +118,9 @@ const ManageRoleAccessPage = () => {
     };
   };
 
-  const matches = useMediaQuery('(min-width: 768px)');
-
   return (
-    <Box
-      sx={{ backgroundColor: "#f0f0f0", minHeight: "100vh", padding: "1rem" }}
-    >
-      <Flex
-        direction={{ base: "column", sm: "row" }}
-        gap={{ base: "sm", sm: "lg" }}
-        justify={{ sm: "center" }}
-      >
-        <Button
-          variant="gradient"
-          size="xl"
-          radius="xs"
-          gradient={{ from: "blue", to: "cyan", deg: 90 }}
-          w={matches && "500px"}
-          style={{
-            fontSize: "1.8rem",
-            lineHeight: 1.2,
-          }}
-        >
-          <Title
-            order={1}
-            align="center"
-            style={{
-              fontSize: "1.25rem",
-              wordBreak: "break-word",
-            }}
-          >
-            Manage Role Access
-          </Title>
-        </Button>
-      </Flex>
+    <Container size="lg">
+      <PageHeader title="Manage Role Access" />
 
       <Flex direction={{ base: "column", lg: "row" }} >
         {/* Form Section */}
@@ -234,7 +203,7 @@ const ManageRoleAccessPage = () => {
           </Button>
         </Group>
       </Modal>
-    </Box>
+    </Container>
   );
 };
 
