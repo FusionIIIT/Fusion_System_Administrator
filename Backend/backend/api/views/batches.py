@@ -62,3 +62,27 @@ def save_students_batch(request):
 @permission_classes(Privileged)
 def add_single_student(request):
     return _run(service.add_student, request.data)
+
+
+@api_view(["GET"])
+def get_student(request, student_id):
+    return _run(service.get_student, student_id)
+
+
+@api_view(["PUT", "PATCH"])
+@permission_classes(Privileged)
+def update_student(request, student_id):
+    return _run(service.update_student, student_id, request.data)
+
+
+@api_view(["DELETE", "POST"])
+@permission_classes(Privileged)
+def delete_student(request, student_id):
+    return _run(service.delete_student, student_id)
+
+
+@api_view(["POST", "PUT"])
+@permission_classes(Privileged)
+def update_student_status(request, student_id):
+    status_value = request.data.get("reported_status") or request.data.get("status")
+    return _run(service.update_student_status, student_id, status_value)

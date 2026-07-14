@@ -1,10 +1,10 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
-import { Button, Grid, Group, NumberInput, Paper, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Button, Card, Grid, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, ThemeIcon } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { notifications } from "@mantine/notifications";
 import { addSingleStudent } from "../../../api/UpcomingBatches";
-import { EMPTY_MANUAL_FORM, MANUAL_SECTIONS } from "../config/studentFields";
+import { EMPTY_MANUAL_FORM, MANUAL_SECTIONS, SECTION_META } from "../config/studentFields";
 import { SPECIALIZATION_OPTIONS } from "../config/programmeConfig";
 
 const toDateString = (value) => {
@@ -17,43 +17,34 @@ const ManualEntryForm = ({ config, academicYear, onSubmitted, onCancel }) => {
   const [form, setForm] = useState(EMPTY_MANUAL_FORM);
   const [submitting, setSubmitting] = useState(false);
 
-  const disciplineOptions = useMemo(
-    () => [...new Set(Object.values(config.disciplineMap).flat())],
-    [config],
-  );
+  const disciplineOptions = useMemo(() => [...new Set(Object.values(config.disciplineMap).flat())], [config]);
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const renderField = (field) => {
     if (field.specializationOnly && !config.showSpecialization) return null;
     if (field.visibleWhen && !field.visibleWhen(form)) return null;
 
-    const common = {
-      label: field.label,
-      required: field.required,
-      value: form[field.key] ?? "",
-      withAsterisk: field.required,
-      size: "md",
-    };
-
+    const common = { label: field.label, required: field.required, size: "sm", radius: "md" };
     let input;
     if (field.type === "textarea") {
-      input = <Textarea {...common} autosize minRows={2} onChange={(e) => setField(field.key, e.currentTarget.value)} />;
+      input = <Textarea {...common} autosize minRows={2} value={form[field.key] ?? ""} onChange={(e) => setField(field.key, e.currentTarget.value)} />;
     } else if (field.type === "number") {
-      input = <NumberInput {...common} value={form[field.key]} onChange={(v) => setField(field.key, v)} />;
+      input = <NumberInput {...common} hideControls value={form[field.key] ?? ""} onChange={(v) => setField(field.key, v)} />;
     } else if (field.type === "date") {
-      input = <DateInput {...common} value={form[field.key]} valueFormat="YYYY-MM-DD" onChange={(v) => setField(field.key, v)} />;
+      input = <DateInput {...common} clearable value={form[field.key] || null} valueFormat="YYYY-MM-DD" onChange={(v) => setField(field.key, v)} />;
     } else if (field.type === "select") {
-      input = <Select {...common} data={field.options} onChange={(v) => setField(field.key, v)} clearable searchable />;
+      input = <Select {...common} clearable searchable data={field.options} value={form[field.key] || null} onChange={(v) => setField(field.key, v)} />;
     } else if (field.type === "discipline") {
-      input = <Select {...common} data={disciplineOptions} onChange={(v) => setField(field.key, v)} searchable />;
+      input = <Select {...common} searchable data={disciplineOptions} value={form[field.key] || null} onChange={(v) => setField(field.key, v)} />;
     } else if (field.type === "specialization") {
-      input = <Select {...common} data={SPECIALIZATION_OPTIONS} onChange={(v) => setField(field.key, v)} searchable clearable />;
+      input = <Select {...common} searchable clearable data={SPECIALIZATION_OPTIONS} value={form[field.key] || null} onChange={(v) => setField(field.key, v)} />;
     } else {
-      input = <TextInput {...common} onChange={(e) => setField(field.key, e.currentTarget.value)} />;
+      input = <TextInput {...common} value={form[field.key] ?? ""} onChange={(e) => setField(field.key, e.currentTarget.value)} />;
     }
 
+    const span = field.type === "textarea" ? { base: 12 } : { base: 12, sm: 6, md: 4 };
     return (
-      <Grid.Col span={{ base: 12, sm: 6, md: 4 }} key={field.key}>
+      <Grid.Col span={span} key={field.key}>
         {input}
       </Grid.Col>
     );
@@ -92,18 +83,32 @@ const ManualEntryForm = ({ config, academicYear, onSubmitted, onCancel }) => {
 
   return (
     <Stack gap="md">
-      {MANUAL_SECTIONS.map((section) => (
-        <Paper key={section.title} withBorder p="md" radius="md">
-          <Title order={6} mb="sm">{section.title}</Title>
-          <Grid gutter="md">{section.fields.map(renderField)}</Grid>
-        </Paper>
-      ))}
+      {MANUAL_SECTIONS.map((section) => {
+        const meta = SECTION_META[section.title] || Object.values(SECTION_META)[0];
+        return (
+          <Card key={section.title} withBorder radius="md" padding="md">
+            <Group gap="xs" mb="sm">
+              <ThemeIcon variant="light" color={meta.color} size="md" radius="sm">
+                <meta.icon size={13} />
+              </ThemeIcon>
+              <Text fw={600} size="sm">
+                {section.title}
+              </Text>
+            </Group>
+            <Grid gutter="md">{section.fields.map(renderField)}</Grid>
+          </Card>
+        );
+      })}
       <Text size="xs" c="dimmed">
         Batch is derived from the discipline and category. A matching running batch must exist for the selected year.
       </Text>
       <Group justify="flex-end">
-        <Button variant="default" onClick={onCancel}>Cancel</Button>
-        <Button onClick={handleSubmit} loading={submitting}>Add Student</Button>
+        <Button variant="default" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} loading={submitting}>
+          Add Student
+        </Button>
       </Group>
     </Stack>
   );

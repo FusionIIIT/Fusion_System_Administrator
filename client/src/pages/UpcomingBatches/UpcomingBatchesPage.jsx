@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Container, Tabs } from "@mantine/core";
+import { Badge, Container, Tabs } from "@mantine/core";
 import { useBatches } from "./hooks/useBatches";
 import PageHeader from "../../components/PageHeader/PageHeader";
 import UGBatches from "./components/UGBatches";
@@ -12,6 +12,12 @@ const SECTIONS = {
   phd: PhDBatches,
 };
 
+const TABS = [
+  { value: "ug", label: "UG" },
+  { value: "pg", label: "PG" },
+  { value: "phd", label: "PhD" },
+];
+
 const UpcomingBatchesPage = () => {
   const [active, setActive] = useState("ug");
   const { groups, disciplines, curriculums, loading, refresh } = useBatches();
@@ -22,11 +28,21 @@ const UpcomingBatchesPage = () => {
     <Container size="xl">
       <PageHeader title="Upcoming Batches" subtitle="Admit and manage UG, PG and PhD batches" />
 
-      <Tabs value={active} onChange={setActive} variant="pills" radius="lg" keepMounted={false}>
+      <Tabs value={active} onChange={setActive} variant="pills" radius="md" keepMounted={false}>
         <Tabs.List grow mb="lg">
-          <Tabs.Tab value="ug">UG</Tabs.Tab>
-          <Tabs.Tab value="pg">PG</Tabs.Tab>
-          <Tabs.Tab value="phd">PhD</Tabs.Tab>
+          {TABS.map((tab) => (
+            <Tabs.Tab
+              key={tab.value}
+              value={tab.value}
+              rightSection={
+                <Badge size="sm" circle variant={active === tab.value ? "white" : "light"} color={active === tab.value ? "blue" : "gray"}>
+                  {groups[tab.value]?.length ?? 0}
+                </Badge>
+              }
+            >
+              {tab.label}
+            </Tabs.Tab>
+          ))}
         </Tabs.List>
 
         <Tabs.Panel value={active}>

@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useState } from "react";
-import { Alert, Button, FileInput, Group, List, Paper, Stack, Table, Text } from "@mantine/core";
-import { FaDownload, FaUpload } from "react-icons/fa";
+import { Alert, Button, FileInput, Group, List, Paper, Stack, Table, Text, ThemeIcon } from "@mantine/core";
+import { FaDownload, FaFileExcel, FaUpload } from "react-icons/fa";
 import { notifications } from "@mantine/notifications";
 import { saveStudentsBatch } from "../../../api/UpcomingBatches";
 import { downloadTemplate, parseWorkbook } from "../utils/excel";
@@ -59,10 +59,15 @@ const ExcelUploadFlow = ({ config, academicYear, onSaved, onCancel }) => {
     <Stack gap="md">
       <Paper withBorder p="md" radius="md">
         <Group justify="space-between" align="center" wrap="wrap" gap="sm">
-          <div>
-            <Text fw={500} size="sm">Step 1 · Template</Text>
-            <Text size="xs" c="dimmed">Download the template, fill in student details, then upload the file below.</Text>
-          </div>
+          <Group gap="sm" wrap="nowrap">
+            <ThemeIcon size={40} radius="md" variant="light" color="teal">
+              <FaFileExcel size={17} />
+            </ThemeIcon>
+            <div>
+              <Text fw={600} size="sm">Step 1 · Template</Text>
+              <Text size="xs" c="dimmed">Download the template, fill in student details, then upload the file below.</Text>
+            </div>
+          </Group>
           <Button variant="light" leftSection={<FaDownload size={12} />} onClick={() => downloadTemplate(config.label)}>
             Download Template
           </Button>

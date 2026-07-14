@@ -1,3 +1,11 @@
+import { FaGraduationCap, FaIdCard, FaUsers } from "react-icons/fa";
+
+export const SECTION_META = {
+  Identity: { icon: FaIdCard, color: "blue" },
+  Academic: { icon: FaGraduationCap, color: "grape" },
+  "Contact & Family": { icon: FaUsers, color: "teal" },
+};
+
 export const GENDER_OPTIONS = ["Male", "Female", "Other"];
 export const CATEGORY_OPTIONS = ["GEN", "OBC", "SC", "ST", "EWS"];
 export const PWD_OPTIONS = ["NO", "YES"];
@@ -130,6 +138,112 @@ export const EXCEL_COLUMNS = [
   "State",
   "Full Address",
 ];
+
+export const STATUS_OPTIONS = [
+  { value: "NOT_REPORTED", label: "Not Reported" },
+  { value: "REPORTED", label: "Reported" },
+  { value: "WITHDRAWAL", label: "Withdrawal" },
+];
+
+export const STATUS_COLOR = {
+  NOT_REPORTED: "gray",
+  REPORTED: "green",
+  WITHDRAWAL: "red",
+};
+
+export const STUDENT_DETAIL_GROUPS = [
+  {
+    title: "Identity",
+    fields: [
+      ["Name", "name"],
+      ["JEE App. No. / CCMT Roll No.", "jee_app_no"],
+      ["Institute Roll Number", "roll_number"],
+      ["Institute Email", "institute_email"],
+      ["Gender", "gender"],
+      ["Category", "category"],
+      ["Date of Birth", "date_of_birth"],
+      ["Blood Group", "blood_group"],
+      ["Minority", "minority"],
+      ["PwD", "pwd"],
+      ["PwD Category", "pwd_category"],
+    ],
+  },
+  {
+    title: "Academic",
+    fields: [
+      ["Branch", "branch"],
+      ["Specialization", "specialization"],
+      ["Section", "section"],
+      ["AI Rank", "ai_rank"],
+      ["Category Rank", "category_rank"],
+      ["10th Marks", "tenth_marks"],
+      ["12th Marks", "twelfth_marks"],
+      ["Allotted Category", "allotted_category"],
+      ["Allotted Gender", "allotted_gender"],
+      ["Admission Mode", "admission_mode"],
+      ["Income Group", "income_group"],
+      ["Income", "income"],
+      ["Year", "year"],
+      ["Academic Year", "academic_year"],
+    ],
+  },
+  {
+    title: "Contact & Family",
+    fields: [
+      ["Mobile", "phone_number"],
+      ["Personal Email", "personal_email"],
+      ["Parent Email", "parent_email"],
+      ["Address", "address"],
+      ["State", "state"],
+      ["Country", "country"],
+      ["Nationality", "nationality"],
+      ["Father's Name", "father_name"],
+      ["Father's Occupation", "father_occupation"],
+      ["Father Mobile", "father_mobile"],
+      ["Mother's Name", "mother_name"],
+      ["Mother's Occupation", "mother_occupation"],
+      ["Mother Mobile", "mother_mobile"],
+      ["Aadhar Number", "aadhar_number"],
+    ],
+  },
+];
+
+export const studentToForm = (s) => ({
+  name: s.name || "",
+  jeeAppNo: s.jee_app_no || "",
+  rollNumber: s.roll_number || "",
+  instituteEmail: s.institute_email || "",
+  gender: s.gender || "",
+  category: s.category || "",
+  dob: s.date_of_birth ? new Date(s.date_of_birth) : null,
+  bloodGroup: s.blood_group || "",
+  minority: s.minority || "",
+  pwd: s.pwd || "NO",
+  pwdCategory: s.pwd_category || "",
+  branch: s.branch || "",
+  specialization: s.specialization || "",
+  jeeRank: s.ai_rank ?? "",
+  categoryRank: s.category_rank ?? "",
+  allottedCategory: s.allotted_category || "",
+  allottedGender: s.allotted_gender || "",
+  admissionMode: s.admission_mode || "",
+  incomeGroup: s.income_group || "",
+  income: s.income ?? "",
+  phoneNumber: s.phone_number || "",
+  email: s.personal_email || "",
+  parentEmail: s.parent_email || "",
+  address: s.address || "",
+  state: s.state || "",
+  country: s.country || "India",
+  nationality: s.nationality || "Indian",
+  fname: s.father_name || "",
+  fatherOccupation: s.father_occupation || "",
+  fatherMobile: s.father_mobile || "",
+  mname: s.mother_name || "",
+  motherOccupation: s.mother_occupation || "",
+  motherMobile: s.mother_mobile || "",
+  aadharNumber: s.aadhar_number || "",
+});
 
 export const ROSTER_COLUMNS = [
   { key: "roll_number", label: "Roll No." },

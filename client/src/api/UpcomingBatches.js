@@ -41,3 +41,25 @@ export const addSingleStudent = async (payload) => {
   const { data } = await axiosInstance.post(`${BASE}/add-student/`, payload);
   return data;
 };
+
+export const getStudent = async (studentId) => {
+  const { data } = await axiosInstance.get(`${BASE}/student/${studentId}/`);
+  return data;
+};
+
+export const updateStudent = async (studentId, payload) => {
+  const { data } = await axiosInstance.put(`${BASE}/student/${studentId}/update/`, payload);
+  return data;
+};
+
+export const deleteStudent = async (studentId) => {
+  const { data } = await axiosInstance.delete(`${BASE}/student/${studentId}/delete/`);
+  return data;
+};
+
+export const updateStudentStatus = async (studentId, status) => {
+  const { data } = await axiosInstance.post(`${BASE}/student/${studentId}/status/`, {
+    reported_status: status,
+  });
+  return data;
+};
