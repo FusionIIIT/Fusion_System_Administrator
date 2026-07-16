@@ -11,4 +11,8 @@ urlpatterns = [
     path("upcoming-batches/<int:batch_id>/students/", batches.get_batch_students, name="get-batch-students"),
     path("upcoming-batches/save-students/", batches.save_students_batch, name="save-students-batch"),
     path("upcoming-batches/add-student/", batches.add_single_student, name="add-single-student"),
+    path("upcoming-batches/student/<int:student_id>/", batches.get_student, name="get-student"),
+    path("upcoming-batches/student/<int:student_id>/update/", batches.update_student, name="update-student"),
+    path("upcoming-batches/student/<int:student_id>/delete/", batches.delete_student, name="delete-student"),
+    path("upcoming-batches/student/<int:student_id>/status/", batches.update_student_status, name="update-student-status"),
 ]

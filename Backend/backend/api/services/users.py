@@ -4,7 +4,6 @@ import concurrent.futures
 import logging
 import secrets
 import string
-import random
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.conf import settings
@@ -27,10 +26,12 @@ def generate_random_password(length=12):
             return password
 
 def create_password(data):
-    user_name = data.get('username').lower().capitalize()
-    special_characters = string.punctuation
-    random_specials = ''.join(random.choice(special_characters) for _ in range(3))
-    return f"{user_name}{random_specials}"
+    # Return a strong, unpredictable password. Previously this derived the password
+    # from the username plus three characters chosen with the non-cryptographic
+    # `random` module, which is both guessable (username-based) and low-entropy.
+    # Account credentials must never be predictable, so delegate to the CSPRNG-backed
+    # generator. (`data` is accepted for backwards compatibility with callers.)
+    return generate_random_password()
 
 
 

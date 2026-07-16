@@ -8,6 +8,14 @@ const yearRange = (back) => {
   return Array.from({ length: back + 1 }, (_, i) => current - i);
 };
 
+const PHD_DISCIPLINES = [
+  "Computer Science and Engineering",
+  "Electronics and Communication Engineering",
+  "Mechanical Engineering",
+  "Smart Manufacturing",
+  "Design",
+];
+
 export const PROGRAMME_CONFIG = {
   ug: {
     key: "ug",
@@ -62,15 +70,10 @@ export const PROGRAMME_CONFIG = {
     label: "PhD",
     programmeType: "phd",
     showSpecialization: true,
-    programmeOptions: ["PhD"],
+    programmeOptions: ["PhD (Odd)", "PhD (Even)"],
     disciplineMap: {
-      PhD: [
-        "Computer Science and Engineering",
-        "Electronics and Communication Engineering",
-        "Mechanical Engineering",
-        "Smart Manufacturing",
-        "Design",
-      ],
+      "PhD (Odd)": PHD_DISCIPLINES,
+      "PhD (Even)": PHD_DISCIPLINES,
     },
     yearOptions: yearRange(5),
     batchNamePrefixes: ["PhD", "Phd", "phd"],

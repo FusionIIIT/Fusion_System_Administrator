@@ -1,3 +1,4 @@
+from .archive import ArchiveLog
 from .backups import BackupRecord, BackupSchedule, HealthCheck, RestoreRecord
 from .batches import (
     BatchConfiguration,
@@ -23,6 +24,7 @@ from .erp import (
 )
 
 __all__ = [
+    "ArchiveLog",
     "AuthUser",
     "Batch",
     "BatchConfiguration",

@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from "react";
-import { Button, Group, Modal, NumberInput, Select, Stack } from "@mantine/core";
+import { Box, Button, CloseButton, Group, Modal, NumberInput, Select, Stack, Text, ThemeIcon } from "@mantine/core";
+import { FaLayerGroup } from "react-icons/fa";
 import { notifications } from "@mantine/notifications";
 import { createBatch } from "../../../api/UpcomingBatches";
 
@@ -62,8 +63,41 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={`Add ${config.label} Batch`} centered>
-      <Stack gap="md">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      centered
+      radius="md"
+      padding={0}
+      withCloseButton={false}
+      overlayProps={{ backgroundOpacity: 0.55, blur: 2 }}
+    >
+      <Box
+        p="lg"
+        style={{
+          background: "linear-gradient(135deg, var(--mantine-color-indigo-7), var(--mantine-color-blue-9))",
+          color: "white",
+        }}
+      >
+        <Group justify="space-between" wrap="nowrap">
+          <Group gap="md" wrap="nowrap">
+            <ThemeIcon size={44} radius="md" variant="white" color="indigo">
+              <FaLayerGroup size={18} />
+            </ThemeIcon>
+            <div>
+              <Text fw={700} size="lg" c="white">
+                Add {config.label} Batch
+              </Text>
+              <Text size="sm" c="rgba(255,255,255,0.85)">
+                Create a new admission batch and allocate seats
+              </Text>
+            </div>
+          </Group>
+          <CloseButton onClick={onClose} size="lg" c="white" variant="transparent" aria-label="Close" />
+        </Group>
+      </Box>
+
+      <Stack gap="md" p="lg">
         <Select
           label="Programme"
           placeholder="Select programme"
@@ -74,6 +108,7 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
             setDisciplineId(null);
           }}
           size="md"
+          radius="md"
           required
         />
         <Select
@@ -84,18 +119,22 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
           onChange={setDisciplineId}
           disabled={!programme}
           size="md"
+          radius="md"
           searchable
           required
         />
-        <Select
-          label="Batch Year"
-          data={config.yearOptions.map(String)}
-          value={year}
-          onChange={setYear}
-          size="md"
-          required
-        />
-        <NumberInput label="Total Seats" min={1} value={totalSeats} onChange={setTotalSeats} size="md" required />
+        <Group grow align="flex-start">
+          <Select
+            label="Batch Year"
+            data={config.yearOptions.map(String)}
+            value={year}
+            onChange={setYear}
+            size="md"
+            radius="md"
+            required
+          />
+          <NumberInput label="Total Seats" min={1} value={totalSeats} onChange={setTotalSeats} size="md" radius="md" required />
+        </Group>
         <Select
           label="Curriculum (optional)"
           placeholder="Assign a working curriculum"
@@ -103,14 +142,24 @@ const AddBatchModal = ({ opened, onClose, config, disciplines, curriculums, onCr
           value={curriculumId}
           onChange={setCurriculumId}
           size="md"
+          radius="md"
           searchable
           clearable
         />
-        <Group justify="flex-end" mt="sm">
-          <Button variant="default" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSubmit} loading={submitting}>Create Batch</Button>
-        </Group>
       </Stack>
+
+      <Group
+        justify="flex-end"
+        p="md"
+        style={{ borderTop: "1px solid var(--mantine-color-gray-3)", background: "var(--mantine-color-body)" }}
+      >
+        <Button variant="default" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} loading={submitting}>
+          Create Batch
+        </Button>
+      </Group>
     </Modal>
   );
 };

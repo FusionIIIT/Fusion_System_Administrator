@@ -11,7 +11,7 @@ import StudentListModal from "./StudentListModal";
 
 const BatchSection = ({ config, batches, disciplines, curriculums, loading, refresh }) => {
   const [search, setSearch] = useState("");
-  const [filterYear, setFilterYear] = useState("all");
+  const [filterYear, setFilterYear] = useState(String(config.yearOptions[0]));
   const [addBatchOpen, setAddBatchOpen] = useState(false);
   const [addStudentsOpen, setAddStudentsOpen] = useState(false);
   const [viewBatch, setViewBatch] = useState(null);
@@ -110,7 +110,13 @@ const BatchSection = ({ config, batches, disciplines, curriculums, loading, refr
         config={config}
         onSaved={refresh}
       />
-      <StudentListModal opened={!!viewBatch} onClose={() => setViewBatch(null)} batch={viewBatch} />
+      <StudentListModal
+        opened={!!viewBatch}
+        onClose={() => setViewBatch(null)}
+        batch={viewBatch}
+        config={config}
+        onChanged={refresh}
+      />
 
       <Modal opened={!!pendingDelete} onClose={() => setPendingDelete(null)} title="Delete batch" centered>
         <Text size="sm">

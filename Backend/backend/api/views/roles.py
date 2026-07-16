@@ -55,6 +55,7 @@ def get_user_role_by_username(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT'])
+@permission_classes([IsAdminUser])
 def update_user_roles(request):
     username = request.data.get('username')
     roles_to_add = request.data.get('roles')
@@ -107,6 +108,7 @@ def get_category_designations(request):
     return Response(serializer.data)
 
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 def add_designation(request):
     serializer = GlobalsDesignationSerializer(data=request.data)
     if serializer.is_valid():
@@ -145,6 +147,7 @@ def add_designation(request):
         return Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
     
 @api_view(['PUT', 'PATCH'])
+@permission_classes([IsAdminUser])
 def update_designation(request):
     name = request.data.get('name')
     
@@ -180,6 +183,7 @@ def get_module_access(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
     
 @api_view(['PUT'])
+@permission_classes([IsAdminUser])
 def modify_moduleaccess(request):
     role_name = request.data.get('designation')
     

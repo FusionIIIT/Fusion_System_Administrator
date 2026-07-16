@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from django.db import transaction
@@ -5,6 +6,8 @@ from django.db.models import Q
 from django.utils import timezone
 
 from ..models import Batch, Curriculum, Discipline, Student, StudentBatchUpload
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceError(Exception):
@@ -340,13 +343,119 @@ def serialize_student(student):
         "admission_mode_remarks": student.admission_mode_remarks or "",
         "income_group": student.income_group or "",
         "income": str(student.income) if student.income is not None else "",
+        "tenth_marks": student.tenth_marks,
+        "twelfth_marks": student.twelfth_marks,
         "year": student.year,
         "academic_year": student.academic_year,
         "programme_type": student.programme_type,
+        "allocation_status": student.allocation_status,
         "reported_status": student.reported_status,
-        "status_display": "Reported" if student.reported_status == "REPORTED" else "Not Reported",
+        "status_display": dict(StudentBatchUpload.REPORTED_STATUS_CHOICES).get(
+            student.reported_status, student.reported_status
+        ),
         "source": student.source,
     }
+
+
+STUDENT_FIELD_MAP = {
+    "jeeAppNo": "jee_app_no", "rollNumber": "roll_number", "instituteEmail": "institute_email",
+    "fname": "father_name", "fatherName": "father_name", "mname": "mother_name", "motherName": "mother_name",
+    "dob": "date_of_birth", "dateOfBirth": "date_of_birth", "phoneNumber": "phone_number",
+    "email": "personal_email", "alternateEmail": "personal_email", "parentEmail": "parent_email",
+    "jeeRank": "ai_rank", "aiRank": "ai_rank", "categoryRank": "category_rank",
+    "tenthMarks": "tenth_marks", "twelfthMarks": "twelfth_marks",
+    "fatherOccupation": "father_occupation", "fatherMobile": "father_mobile",
+    "motherOccupation": "mother_occupation", "motherMobile": "mother_mobile",
+    "allottedCategory": "allotted_category", "allottedGender": "allotted_gender",
+    "bloodGroup": "blood_group", "bloodGroupRemarks": "blood_group_remarks",
+    "pwdCategory": "pwd_category", "pwdCategoryRemarks": "pwd_category_remarks",
+    "admissionMode": "admission_mode", "admissionModeRemarks": "admission_mode_remarks",
+    "incomeGroup": "income_group", "aadharNumber": "aadhar_number", "reportedStatus": "reported_status",
+}
+
+DIRECT_STUDENT_FIELDS = {
+    "name", "gender", "category", "pwd", "minority", "address", "state", "branch", "specialization",
+    "jee_app_no", "roll_number", "institute_email", "father_name", "mother_name", "personal_email",
+    "parent_email", "phone_number", "country", "nationality", "blood_group", "blood_group_remarks",
+    "pwd_category", "pwd_category_remarks", "admission_mode", "admission_mode_remarks", "income_group",
+    "income", "father_occupation", "father_mobile", "mother_occupation", "mother_mobile",
+    "allotted_category", "allotted_gender", "aadhar_number", "reported_status",
+}
+INT_STUDENT_FIELDS = {"ai_rank", "category_rank"}
+FLOAT_STUDENT_FIELDS = {"tenth_marks", "twelfth_marks"}
+
+
+def get_student(student_id):
+    student = StudentBatchUpload.objects.filter(id=student_id).first()
+    if not student:
+        raise ServiceError({"success": False, "message": "Student not found"}, status=404)
+    return {"success": True, "student": serialize_student(student)}
+
+
+def update_student(student_id, data):
+    student = StudentBatchUpload.objects.filter(id=student_id).first()
+    if not student:
+        raise ServiceError({"success": False, "message": "Student not found"}, status=404)
+
+    resolved = {}
+    for key, value in data.items():
+        field = STUDENT_FIELD_MAP.get(key, key)
+        if field in DIRECT_STUDENT_FIELDS or field in INT_STUDENT_FIELDS or field in FLOAT_STUDENT_FIELDS or field == "date_of_birth":
+            resolved[field] = value
+
+    for column, label in (("jee_app_no", "JEE Application Number"), ("roll_number", "Roll Number"), ("institute_email", "Institute Email")):
+        val = resolved.get(column)
+        if val and val != getattr(student, column) and StudentBatchUpload.objects.filter(**{column: val}).exclude(id=student_id).exists():
+            raise ServiceError({"success": False, "message": f"{label} {val} already exists for another student"})
+
+    for field, value in resolved.items():
+        if field == "date_of_birth":
+            student.date_of_birth = parse_date_flexible(value)
+        elif field in INT_STUDENT_FIELDS:
+            setattr(student, field, safe_int(sanitize_rank_value(value)))
+        elif field in FLOAT_STUDENT_FIELDS:
+            try:
+                setattr(student, field, float(value) if value not in (None, "", "null") else None)
+            except (ValueError, TypeError):
+                setattr(student, field, None)
+        elif field == "income":
+            student.income = value or None
+        else:
+            setattr(student, field, value)
+
+    student.save()
+    return {"success": True, "student": serialize_student(student), "message": "Student updated successfully."}
+
+
+def delete_student(student_id):
+    from django.db import connection
+
+    student = StudentBatchUpload.objects.filter(id=student_id).first()
+    if not student:
+        raise ServiceError({"success": False, "message": "Student not found"}, status=404)
+    name = student.name
+    with transaction.atomic():
+        # Clear rows that reference this student so the FK constraints don't block the delete.
+        with connection.cursor() as cursor:
+            for table in ("password_email_log", "student_password_history", "programme_curriculum_studentstatuslog"):
+                try:
+                    cursor.execute(f"DELETE FROM {table} WHERE student_id = %s", [student_id])
+                except Exception:
+                    pass
+        student.delete()
+    return {"success": True, "message": f"Student {name} deleted successfully."}
+
+
+def update_student_status(student_id, status):
+    valid = {choice[0] for choice in StudentBatchUpload.REPORTED_STATUS_CHOICES}
+    if status not in valid:
+        raise ServiceError({"success": False, "message": f"Invalid status. Allowed: {', '.join(sorted(valid))}"})
+    student = StudentBatchUpload.objects.filter(id=student_id).first()
+    if not student:
+        raise ServiceError({"success": False, "message": "Student not found"}, status=404)
+    student.reported_status = status
+    student.save()
+    return {"success": True, "student": serialize_student(student), "message": "Status updated."}
 
 
 def list_disciplines():
@@ -399,27 +508,38 @@ def batch_students(batch_id, specialization=None):
     programme_type = "ug" if batch.name.startswith("B.") else "pg" if batch.name.startswith("M.") else "phd"
     students = StudentBatchUpload.objects.filter(year=batch.year, programme_type=programme_type)
 
-    discipline_name = batch.discipline.name
-    discipline_filter = Q(branch__icontains=discipline_name)
-    if "Computer Science" in discipline_name:
-        discipline_filter |= Q(branch__icontains="CSE") | Q(branch__icontains="Computer Science")
-    elif "Electronics" in discipline_name:
-        discipline_filter |= Q(branch__icontains="ECE") | Q(branch__icontains="Electronics")
-    elif "Mechanical" in discipline_name:
-        discipline_filter |= Q(branch__icontains="ME") | Q(branch__icontains="Mechanical")
-
+    discipline = batch.discipline
     if programme_type == "pg" and specialization:
         students = students.filter(specialization__icontains=specialization)
-    else:
+    elif discipline is not None:
+        discipline_name = discipline.name
+        discipline_filter = Q(branch__icontains=discipline_name)
+        if "Computer Science" in discipline_name:
+            discipline_filter |= Q(branch__icontains="CSE") | Q(branch__icontains="Computer Science")
+        elif "Electronics" in discipline_name:
+            discipline_filter |= Q(branch__icontains="ECE") | Q(branch__icontains="Electronics")
+        elif "Mechanical" in discipline_name:
+            discipline_filter |= Q(branch__icontains="ME") | Q(branch__icontains="Mechanical")
         students = students.filter(discipline_filter)
 
-    rows = [serialize_student(s) for s in students.order_by("roll_number")]
+    try:
+        rows = []
+        for student in students.order_by("roll_number"):
+            try:
+                rows.append(serialize_student(student))
+            except Exception:
+                logger.exception("Skipping unserializable student in batch %s", batch_id)
+    except Exception as exc:
+        # Surface the underlying DB/query error (e.g. a schema mismatch on the
+        # ERP table) instead of a generic 500, so it is actionable to the operator.
+        raise ServiceError({"success": False, "message": f"Failed to fetch students: {exc}"}, status=500) from exc
+
     return {
         "success": True,
         "batch": {
             "id": batch.id,
             "name": batch.name,
-            "discipline": batch.discipline.acronym,
+            "discipline": discipline.acronym if discipline else None,
             "year": batch.year,
             "curriculum": batch.curriculum.name if batch.curriculum else None,
         },

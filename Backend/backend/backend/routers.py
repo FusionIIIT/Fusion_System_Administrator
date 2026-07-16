@@ -26,7 +26,7 @@ class SystemDBRouter:
     }
     # Individual api models (managed=True) that live in system_db. The rest of
     # the api app (managed=False ERP tables) stays on default.
-    system_models = {'backuprecord', 'restorerecord', 'backupschedule', 'healthcheck'}
+    system_models = {'backuprecord', 'restorerecord', 'backupschedule', 'healthcheck', 'archivelog'}
 
     def _routes_to_system(self, app_label, model_name=None):
         if app_label in self.route_app_labels:

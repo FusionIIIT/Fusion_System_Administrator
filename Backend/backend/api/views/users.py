@@ -67,6 +67,7 @@ def reset_password(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 def add_individual_staff(request):
     required_fields = ["username", "first_name", "last_name", "sex", "designation"]
     data = request.data
@@ -152,6 +153,7 @@ def add_individual_staff(request):
             "data": staff_serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    auth_user_data.pop("password", None)  # never expose the password hash in the response
     return Response({
         "message": "Staff added successfully",
         "auth_user_data": auth_user_data,
@@ -161,6 +163,7 @@ def add_individual_staff(request):
     }, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 def add_individual_faculty(request):
     required_fields = ["username", "first_name", "last_name", "sex", "designation"]
     data = request.data
@@ -246,6 +249,7 @@ def add_individual_faculty(request):
             "data": faculty_serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    auth_user_data.pop("password", None)  # never expose the password hash in the response
     return Response({
         "message": "Faculty added successfully",
         "auth_user_data": auth_user_data,
@@ -255,6 +259,7 @@ def add_individual_faculty(request):
     }, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 def bulk_import_users(request):
     # CSV file headers:
     # 1 username
@@ -291,7 +296,7 @@ def bulk_import_users(request):
             continue
         try:
             user_data = {
-                'password': make_password("user@123"),
+                'password': make_password(generate_random_password()),
                 'username': row[0].upper(),
                 'first_name': row[1].lower().capitalize() if len(row[1]) > 0 else 'NA',
                 'last_name': row[2].lower().capitalize() if len(row[2]) > 0 else 'NA',
@@ -344,6 +349,7 @@ def bulk_import_users(request):
     return Response(response_data, status=status.HTTP_201_CREATED)
 
 @api_view(['GET'])
+@permission_classes([IsAdminUser])
 def bulk_export_users(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="users_export.csv"'
@@ -358,6 +364,7 @@ def bulk_export_users(request):
     return response
 
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 def mail_to_whole_batch(request):
     emails = EMAIL_TEST_ARRAY
     email_list = emails.split(',')
