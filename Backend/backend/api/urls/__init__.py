@@ -1,3 +1,4 @@
+from .archive import urlpatterns as archive_urls
 from .backups import urlpatterns as backup_urls
 from .batches import urlpatterns as batch_urls
 from .directory import urlpatterns as directory_urls
@@ -12,4 +13,5 @@ urlpatterns = (
     + schema_urls
     + backup_urls
     + batch_urls
+    + archive_urls
 )
