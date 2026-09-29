@@ -208,3 +208,46 @@ class NavPublicationTests(TestCase):
         codes = [f"m{i}" for i in range(6)]
         with self.assertNumQueries(2, using="system_db"):
             services.build_navigation(codes, [])
+
+
+class EmitRoutesTests(TestCase):
+    databases = {"default", "system_db"}
+
+    def _module(self, code, app, base, status="active"):
+        return IamModule.objects.create(
+            code=code, label=code.title(), base_path=base, nav_section="X",
+            status=status, app=app, source=f"manifest:{app}")
+
+    def emit(self, **kwargs):
+        out = StringIO()
+        call_command("emit_routes", nginx=True, stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_both_paths_come_from_the_base_path_not_the_code(self):
+        """placement_cell is served at /placement; the code is not the path."""
+        self._module("placement_cell", "integrated", "/placement")
+        conf = self.emit()
+        self.assertIn("location ^~ /placement/ {", conf)
+        self.assertIn("location ^~ /api/v1/placement/ {", conf)
+        self.assertNotIn("placement_cell/", conf)
+
+    def test_a_planned_module_is_not_routed(self):
+        self._module("hostel", "integrated", "/hostel", status="planned")
+        self._module("leave", "integrated", "/leave")
+        self.assertNotIn("/hostel/", self.emit())
+
+    def test_an_app_with_no_upstream_is_refused(self):
+        """Emitting it anyway would 404 every one of that app's paths."""
+        self._module("curriculum", "academic", "/curriculum")
+        with self.assertRaises(CommandError):
+            self.emit()
+
+    def test_two_modules_claiming_one_path_are_refused(self):
+        self._module("a", "integrated", "/same")
+        self._module("b", "legacy", "/same")
+        with self.assertRaises(CommandError):
+            self.emit()
+
+    def test_routing_nothing_is_refused(self):
+        with self.assertRaises(CommandError):
+            self.emit()

@@ -13,3 +13,5 @@ test_db.sqlite3
 # Database backups — the backup folder's CONTENTS must NEVER be committed.
 # The per-database sub-folders are recreated at runtime.
 /Backend/backups/
+
+.DS_Store
