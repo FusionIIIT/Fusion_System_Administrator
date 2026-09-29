@@ -25,6 +25,8 @@ somebody reads.
 """
 from __future__ import annotations
 
+from django.conf import settings
+
 from iam.models import IamRole
 
 #: The three basic roles. `compounder` exists in IamUser.KINDS as ERP data but
@@ -42,6 +44,17 @@ def may_hold(kind: str, role_code: str, catalogue: dict[str, IamRole]) -> bool:
     if role is None or not role.is_active:
         return True
     return role.may_be_held_by(kind)
+
+
+def exceptions() -> set[tuple[str, str]]:
+    """(username, designation) pairs allowed despite the catalogue."""
+    raw = getattr(settings, "IAM_ROLE_POLICY_EXCEPTIONS", "") or ""
+    out = set()
+    for item in raw.split(","):
+        username, _, designation = item.strip().partition(":")
+        if username and designation:
+            out.add((username, designation))
+    return out
 
 
 def load_catalogue() -> dict[str, IamRole]:

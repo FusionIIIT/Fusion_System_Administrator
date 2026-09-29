@@ -99,9 +99,12 @@ def _replace_designations(pairs: list[tuple[int, str]], run: SyncRun) -> int:
     usernames = dict(IamUser.objects.values_list("erp_user_id", "username"))
     found = rbac.violations(pairs, identity, usernames)
     enforcing = getattr(settings, "IAM_ENFORCE_ROLE_POLICY", False)
+    allowed = rbac.exceptions()
 
-    refused = {(v["erp_user_id"], v["designation"]) for v in found} if enforcing \
-        else set()
+    # Recorded either way: an exception nobody remembers must stay visible.
+    refused = {(v["erp_user_id"], v["designation"]) for v in found
+               if enforcing
+               and (v["username"], v["designation"]) not in allowed}
 
     IamUserDesignation.objects.all().delete()
     rows = [IamUserDesignation(erp_user_id=uid, designation=name)
@@ -110,7 +113,9 @@ def _replace_designations(pairs: list[tuple[int, str]], run: SyncRun) -> int:
 
     IamRoleViolation.objects.all().delete()
     IamRoleViolation.objects.bulk_create(
-        [IamRoleViolation(enforced=enforcing, **v) for v in found],
+        [IamRoleViolation(
+            enforced=(v["erp_user_id"], v["designation"]) in refused, **v)
+         for v in found],
         batch_size=1000)
 
     run.designations_written = len(rows)

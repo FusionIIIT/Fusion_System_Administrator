@@ -13,7 +13,9 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from iam import sync
-from iam.models import (IamDesignationModule, IamUser, IamUserAcademic,
+from iam.models import (IamDesignationModule, IamRole, IamRoleViolation,
+                        IamUser,
+                        IamUserAcademic,
                         IamUserDesignation, SyncRun)
 
 
@@ -287,3 +289,40 @@ class StudentProfileProjectionTests(TestCase):
                                                  "profile_completed": False}})):
             sync.sync_all()
         self.assertEqual(IamUser.objects.get(pk=1).resume_link, "")
+
+
+class RolePolicyExceptionTests(TestCase):
+    databases = {"default", "system_db"}
+
+    def _sync(self, **settings_kw):
+        # Uncatalogued roles are allowed, so the rule must exist to be broken.
+        IamRole.objects.create(code="acadadmin", label="Academic Administrator",
+                               category="office", allowed_kinds="faculty,staff",
+                               is_active=True)
+        erp = fake_erp(users=[user(1, "intern", kind="student")],
+                       designations=[(1, "acadadmin")])
+        with self.settings(IAM_ENFORCE_ROLE_POLICY=True, **settings_kw), \
+                patch.object(sync, "erp_source", erp):
+            sync.sync_all()
+
+    def test_a_role_the_catalogue_refuses_is_withheld(self):
+        self._sync(IAM_ROLE_POLICY_EXCEPTIONS="")
+        self.assertFalse(IamUserDesignation.objects.filter(
+            erp_user_id=1, designation="acadadmin").exists())
+
+    def test_a_named_exception_is_allowed_through(self):
+        self._sync(IAM_ROLE_POLICY_EXCEPTIONS="intern:acadadmin")
+        self.assertTrue(IamUserDesignation.objects.filter(
+            erp_user_id=1, designation="acadadmin").exists())
+
+    def test_an_exception_is_still_reported(self):
+        """Granted and forgotten must stay visible on the list somebody reads."""
+        self._sync(IAM_ROLE_POLICY_EXCEPTIONS="intern:acadadmin")
+        violation = IamRoleViolation.objects.get(erp_user_id=1)
+        self.assertEqual(violation.designation, "acadadmin")
+        self.assertFalse(violation.enforced)
+
+    def test_an_exception_does_not_cover_a_different_role(self):
+        self._sync(IAM_ROLE_POLICY_EXCEPTIONS="intern:Dean Academic")
+        self.assertFalse(IamUserDesignation.objects.filter(
+            erp_user_id=1, designation="acadadmin").exists())
