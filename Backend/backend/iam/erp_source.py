@@ -16,26 +16,14 @@ from decimal import Decimal
 
 from api.models.erp import (AuthUser, CourseReplacement, GlobalsDesignation,
                             GlobalsExtrainfo, GlobalsHoldsdesignation,
-                            GlobalsModuleaccess, PublishedResultStudent,
-                            ResultAnnouncement, Student, StudentGrade)
+                            GlobalsModuleaccess, PhdStudentBatchUpload,
+                            PublishedResultStudent, ResultAnnouncement, Student,
+                            StudentGrade)
+from api.models.batches import StudentBatchUpload
 from iam import grades
 
 # globals_moduleaccess column -> platform module code. Anything not listed is
 # not exposed by the platform, even if the column exists.
-MODULE_COLUMNS = {
-    "placement_cell": "placement_cell",
-    "hr": "hr",
-    "mess_management": "mess_management",
-    "hostel_management": "hostel_management",
-    "complaint_management": "complaint_management",
-    "phc": "phc",
-    "visitor_hostel": "visitor_hostel",
-    "gymkhana": "gymkhana",
-    "iwd": "iwd",
-    "rspc": "rspc",
-    "purchase_and_store": "purchase_and_store",
-}
-
 
 def iter_users(batch_size: int = 500) -> Iterator[list[dict]]:
     """Every ERP user, in batches, with their identity fields flattened.
@@ -47,6 +35,11 @@ def iter_users(batch_size: int = 500) -> Iterator[list[dict]]:
         e.user_id: e
         for e in GlobalsExtrainfo.objects.select_related("department").all()
     }
+    # A designation is evidence of employment; the absence of everything is not.
+    employed = set(
+        GlobalsHoldsdesignation.objects.values_list("user_id", flat=True).distinct()
+    )
+
     # Student rows key on extrainfo.id, not user_id.
     students = {
         s.id_id: s
@@ -64,7 +57,7 @@ def iter_users(batch_size: int = 500) -> Iterator[list[dict]]:
             "username": u.username,
             "display_name": f"{u.first_name} {u.last_name}".strip() or u.username,
             "email": u.email or "",
-            "kind": (e.user_type or "staff").lower() if e else "staff",
+            "kind": _kind(e, u.id in employed),
             "is_active": bool(u.is_active),
             "password_hash": u.password or "",
             "department": getattr(getattr(e, "department", None), "name", "") or "",
@@ -77,6 +70,13 @@ def iter_users(batch_size: int = 500) -> Iterator[list[dict]]:
             batch = []
     if batch:
         yield batch
+
+
+def _kind(extra, holds_designation: bool) -> str:
+    """What the ERP can actually say this person is."""
+    if extra is not None:
+        return (extra.user_type or "staff").lower()
+    return "staff" if holds_designation else "unknown"
 
 
 def all_user_designations() -> list[tuple[int, str]]:
@@ -119,16 +119,6 @@ def all_student_programme_roles() -> list[tuple[int, str]]:
         for user_id, category in rows
         if user_id and category in PROGRAMME_ROLES
     ]
-
-
-def all_designation_modules() -> list[tuple[str, str]]:
-    """(designation, module_code) for every true boolean in globals_moduleaccess."""
-    out: list[tuple[str, str]] = []
-    for row in GlobalsModuleaccess.objects.all():
-        for code, column in MODULE_COLUMNS.items():
-            if getattr(row, column, False):
-                out.append((row.designation, code))
-    return out
 
 
 def fetch_password_hash(username: str) -> str | None:
@@ -221,6 +211,24 @@ def _grades_by_roll() -> dict[str, list[grades.GradeRow]]:
             credit=Decimal(str(credit)) if credit is not None else Decimal("0"),
             grade=grade or "", semester=semester or 0, semester_type=sem_type,
         ))
+    return out
+
+
+def all_student_profiles() -> dict[int, dict]:
+    """The resume and profile-completion flag each student maintains upstream.
+
+    Keyed by erp_user_id. The portal's profile page is the only place these are
+    written, so nothing downstream needs a second copy of them.
+    """
+    out: dict[int, dict] = {}
+    # The two tables name the same column differently; each is mapped as it is.
+    for model, column in ((StudentBatchUpload, "user_id"),
+                          (PhdStudentBatchUpload, "user_account_id")):
+        rows = (model.objects.exclude(**{f"{column}__isnull": True})
+                .values_list(column, "resume_link", "profile_completed"))
+        for user_id, resume, completed in rows:
+            out[user_id] = {"resume_link": (resume or "").strip(),
+                            "profile_completed": bool(completed)}
     return out
 
 

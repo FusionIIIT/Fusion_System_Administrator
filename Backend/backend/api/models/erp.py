@@ -356,3 +356,16 @@ class PublishedResultStudent(models.Model):
     class Meta:
         managed = False
         db_table = "examination_publishedresultstudent"
+
+
+class PhdStudentBatchUpload(models.Model):
+    """The same record for doctoral admissions, in its own table."""
+
+    roll_number = models.CharField(max_length=20)
+    user_account_id = models.IntegerField(null=True)
+    resume_link = models.CharField(max_length=500, blank=True)
+    profile_completed = models.BooleanField(default=False)
+
+    class Meta:
+        managed = False
+        db_table = "programme_curriculum_phdstudentbatchupload"

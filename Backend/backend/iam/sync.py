@@ -15,14 +15,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from iam import erp_source, rbac
-from iam.models import (IamDesignationModule, IamRoleViolation, IamUser,
-                        IamUserAcademic, IamUserDesignation, SyncRun)
+from iam.models import (IamRoleViolation, IamUser, IamUserAcademic,
+                        IamUserDesignation, SyncRun)
 
 log = logging.getLogger("fusion.iam.sync")
 
 USER_FIELDS = ["username", "display_name", "email", "kind", "is_active",
                "password_hash", "department", "programme", "discipline",
-               "batch_year", "synced_at"]
+               "batch_year", "resume_link", "profile_completed", "synced_at"]
 
 # Stamped onto every academic row. Bump the version when iam/grades.py changes
 # so a stale CPI is identifiable after the fact rather than indistinguishable.
@@ -36,8 +36,12 @@ def sync_all(*, batch_size: int = 500, deactivate_missing: bool = True) -> SyncR
         seen: set[int] = set()
         written = 0
 
+        profiles = erp_source.all_student_profiles()
         for batch in erp_source.iter_users(batch_size=batch_size):
+            for r in batch:
+                r.update(profiles.get(r["erp_user_id"], {}))
             rows = [IamUser(**r) for r in batch]
+            run.usernames_released += _release_usernames(batch)
             IamUser.objects.bulk_create(
                 rows, update_conflicts=True,
                 unique_fields=["erp_user_id"], update_fields=USER_FIELDS,
@@ -55,8 +59,6 @@ def sync_all(*, batch_size: int = 500, deactivate_missing: bool = True) -> SyncR
                  # student-facing permissions reach them, and the ERP records
                  # "student" for all 3,027 regardless of programme.
                  *erp_source.all_student_programme_roles()], run)
-            run.module_grants_written = _replace_module_grants(
-                erp_source.all_designation_modules())
             run.academics_written = _replace_academics(
                 erp_source.all_academic_standings())
 
@@ -97,9 +99,12 @@ def _replace_designations(pairs: list[tuple[int, str]], run: SyncRun) -> int:
     usernames = dict(IamUser.objects.values_list("erp_user_id", "username"))
     found = rbac.violations(pairs, identity, usernames)
     enforcing = getattr(settings, "IAM_ENFORCE_ROLE_POLICY", False)
+    allowed = rbac.exceptions()
 
-    refused = {(v["erp_user_id"], v["designation"]) for v in found} if enforcing \
-        else set()
+    # Recorded either way: an exception nobody remembers must stay visible.
+    refused = {(v["erp_user_id"], v["designation"]) for v in found
+               if enforcing
+               and (v["username"], v["designation"]) not in allowed}
 
     IamUserDesignation.objects.all().delete()
     rows = [IamUserDesignation(erp_user_id=uid, designation=name)
@@ -108,27 +113,39 @@ def _replace_designations(pairs: list[tuple[int, str]], run: SyncRun) -> int:
 
     IamRoleViolation.objects.all().delete()
     IamRoleViolation.objects.bulk_create(
-        [IamRoleViolation(enforced=enforcing, **v) for v in found],
+        [IamRoleViolation(
+            enforced=(v["erp_user_id"], v["designation"]) in refused, **v)
+         for v in found],
         batch_size=1000)
 
     run.designations_written = len(rows)
     return len(found)
 
 
-def _replace_module_grants(pairs: list[tuple[str, str]]) -> int:
-    """Same reasoning: a revoked module grant must actually disappear.
+def _release_usernames(batch: list[dict]) -> int:
+    """Free a username the ERP has moved to a different account.
 
-    Scoped to this writer's own rows. A service that declares its own modules
-    seeds them as `manifest`, and a wholesale delete here would wipe those on
-    every sync — every user silently losing a module that was working.
+    An account deleted and recreated upstream keeps its username but gets a new
+    id. Upserting on erp_user_id leaves the old row holding that username, and
+    the unique index then rejects the new one — the whole sync dies on one row.
+
+    The stale holder is retired, never deleted: placement applications and audit
+    trails reference its id, and a hard delete would leave them dangling.
     """
-    IamDesignationModule.objects.filter(
-        source=IamDesignationModule.ERP).delete()
-    rows = [IamDesignationModule(designation=d, module_code=m,
-                                 source=IamDesignationModule.ERP)
-            for d, m in set(pairs)]
-    IamDesignationModule.objects.bulk_create(rows, batch_size=1000)
-    return len(rows)
+    wanted = {r["username"]: r["erp_user_id"] for r in batch if r.get("username")}
+    if not wanted:
+        return 0
+    stale = (IamUser.objects.filter(username__in=wanted)
+             .exclude(erp_user_id__in=wanted.values()))
+    released = 0
+    for holder in stale:
+        log.warning("iam.sync.username_moved username=%s from=%s to=%s",
+                    holder.username, holder.erp_user_id, wanted[holder.username])
+        holder.username = f"retired:{holder.erp_user_id}:{holder.username}"[:150]
+        holder.is_active = False
+        holder.save(update_fields=["username", "is_active"])
+        released += 1
+    return released
 
 
 def _replace_academics(standings: list[dict]) -> int:
