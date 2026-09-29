@@ -6,6 +6,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from iam.authentication import COOKIE_NAME, IamTokenAuthentication
+from iam import services
+from iam.models import IamUser
 from iam.services import Locked, authenticate, build_session
 
 TOKEN_TTL_HOURS = 12
@@ -80,3 +82,24 @@ class MeView(APIView):
             return Response({"detail": "User no longer exists."},
                             status=status.HTTP_404_NOT_FOUND)
         return Response(payload)
+
+    def patch(self, request):
+        """Remember which designation they chose to work as."""
+        role = (request.data.get("last_selected_role") or "").strip()
+        token = request.user.token
+        user = IamUser.objects.filter(erp_user_id=token.erp_user_id).first()
+        if user is None:
+            return Response({"detail": "User no longer exists."},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        roles = services.designations_for(user.erp_user_id)
+        if user.kind not in roles:
+            roles = [user.kind, *roles]
+        if role and role not in roles:
+            # A role they do not hold would vanish on the next read, looking broken.
+            return Response({"detail": f"You do not hold the role {role!r}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user.last_selected_role = role
+        user.save(update_fields=["last_selected_role"])
+        return Response(build_session(token))

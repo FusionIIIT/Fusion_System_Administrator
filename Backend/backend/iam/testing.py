@@ -10,16 +10,22 @@ _built: set[str] = set()
 
 
 def _models():
-    """Every unmanaged model in the ERP shadow module."""
+    """Every unmanaged model shadowing an ERP table.
+
+    Named by module rather than by `managed is False` alone, so a new shadow
+    module is an explicit decision instead of something tests silently start
+    creating tables for.
+    """
     from django.apps import apps
 
-    from api.models import erp
+    from api.models import batches, erp
 
+    shadows = {erp.__name__, batches.__name__}
     return [
         model
         # create_model builds a model's own M2M tables, so skip auto-created ones.
         for model in apps.get_app_config("api").get_models()
-        if not model._meta.managed and model.__module__ == erp.__name__
+        if not model._meta.managed and model.__module__ in shadows
     ]
 
 

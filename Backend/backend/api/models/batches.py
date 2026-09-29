@@ -160,6 +160,10 @@ class StudentBatchUpload(models.Model):
         related_name="uploaded_students", db_column="created_by_id",
     )
 
+    #: Projected to placement, so a student keeps one resume, not one per service.
+    resume_link = models.CharField(max_length=500, blank=True)
+    profile_completed = models.BooleanField(default=False)
+
     class Meta:
         managed = False
         db_table = "programme_curriculum_studentbatchupload"

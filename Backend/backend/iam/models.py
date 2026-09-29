@@ -225,6 +225,13 @@ class IamUser(models.Model):
     discipline = models.CharField(max_length=40, blank=True, db_index=True)
     batch_year = models.IntegerField(null=True, blank=True)
 
+    #: Maintained on the portal's profile page, so every service reads one resume.
+    resume_link = models.CharField(max_length=500, blank=True)
+    profile_completed = models.BooleanField(default=False)
+
+    #: Which designation they chose to work as. Not an authorisation input.
+    last_selected_role = models.CharField(max_length=155, blank=True)
+
     synced_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -259,21 +266,24 @@ class IamUserDesignation(models.Model):
 class IamDesignationModule(models.Model):
     """Which modules a designation may enter.
 
-    Two writers, so every row records which one put it there. The ERP projection
-    rewrites globals_moduleaccess wholesale; a service's permission manifest owns
-    the modules it declares. Without `source` the second writer's rows look like
-    stale rows to the first, and a sync silently revokes a working module. Reads
-    are the union — a grant from either source is a grant.
+    Every service publishes its own modules and owns those rows alone. Without
+    a publisher, the second writer's rows look like stale rows to the first and
+    a seed silently revokes a working module. Reads are the union across
+    publishers — a grant from any of them is a grant.
     """
 
-    ERP = "erp"
+    #: Rows written before manifests were attributed to a publisher.
     MANIFEST = "manifest"
+    MANIFEST_PREFIX = "manifest:"
 
     designation = models.CharField(max_length=155, db_index=True)
     module_code = models.CharField(max_length=48)
-    source = models.CharField(
-        max_length=16, default=ERP,
-        choices=[(ERP, "ERP projection"), (MANIFEST, "Service manifest")])
+    #: "manifest:<publisher>" — one value per writer, never shared.
+    source = models.CharField(max_length=32)
+
+    @classmethod
+    def manifest_source(cls, publisher: str) -> str:
+        return f"{cls.MANIFEST_PREFIX}{publisher}"
 
     class Meta:
         db_table = "iam_designation_module"
@@ -346,6 +356,8 @@ class SyncRun(models.Model):
     role_violations = models.IntegerField(default=0)
     academics_written = models.IntegerField(default=0)
     deactivated = models.IntegerField(default=0)
+    #: Usernames the ERP moved to a new account, freed from their old holder.
+    usernames_released = models.IntegerField(default=0)
     error = models.TextField(blank=True)
 
     class Meta:
@@ -430,3 +442,62 @@ class IamRoleViolation(models.Model):
             models.UniqueConstraint(fields=["erp_user_id", "designation"],
                                     name="iam_role_violation_unique"),
         ]
+
+
+class IamModule(models.Model):
+    """A module's sidebar entry, published by the service that owns it.
+
+    The grants say which modules you may enter; these say what they are called
+    and where they live. Held here so one sidebar can span every Fusion app
+    rather than each app drawing only the modules it happens to implement.
+    """
+
+    STATUS = [("planned", "Planned"), ("active", "Active"),
+              ("deprecated", "Deprecated")]
+
+    code = models.CharField(max_length=48, db_index=True)
+    label = models.CharField(max_length=80)
+    icon = models.CharField(max_length=48, default="FaCircle")
+    base_path = models.CharField(max_length=80)
+    nav_section = models.CharField(max_length=48, default="Modules")
+    sort_order = models.PositiveSmallIntegerField(default=100)
+    status = models.CharField(max_length=16, choices=STATUS, default="planned")
+    #: Which app serves these paths; the client turns it into a base URL.
+    app = models.CharField(max_length=32)
+    source = models.CharField(max_length=32)
+
+    class Meta:
+        db_table = "iam_module"
+        ordering = ["nav_section", "sort_order", "label"]
+        constraints = [
+            models.UniqueConstraint(fields=["code", "source"],
+                                    name="iam_module_unique_per_publisher"),
+        ]
+
+    def __str__(self) -> str:
+        return self.code
+
+
+class IamNavItem(models.Model):
+    """A link inside a module, hidden unless the caller holds its permission."""
+
+    module = models.ForeignKey(IamModule, on_delete=models.CASCADE,
+                               related_name="nav_items")
+    code = models.CharField(max_length=80)
+    label = models.CharField(max_length=80)
+    icon = models.CharField(max_length=48, default="FaCircle")
+    to = models.CharField(max_length=160)
+    required_permission = models.CharField(max_length=100, blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=100)
+    source = models.CharField(max_length=32)
+
+    class Meta:
+        db_table = "iam_nav_item"
+        ordering = ["sort_order", "label"]
+        constraints = [
+            models.UniqueConstraint(fields=["code", "source"],
+                                    name="iam_nav_item_unique_per_publisher"),
+        ]
+
+    def __str__(self) -> str:
+        return self.code

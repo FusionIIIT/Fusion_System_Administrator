@@ -10,14 +10,14 @@ login, which is correct.
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password
 from django.db.models import Q
 from django.utils import timezone
 
-from iam.models import (IamDesignationModule, IamToken, IamUser,
+from iam.models import (IamDesignationModule, IamModule, IamToken, IamUser,
                         IamUserAcademic, IamUserDesignation, LoginAttempt,
                         RolePermission, SyncRun)
 
@@ -126,12 +126,69 @@ def modules_for(designations: Sequence[str]) -> list[str]:
                       .values_list("module_code", flat=True)))
 
 
+def modules_by_designation(designations: Sequence[str]) -> dict[str, list[str]]:
+    """Which modules each designation grants, separately.
+
+    `modules_for` answers "may this person enter", which is the union. A shell
+    that offers a role switcher needs the breakdown: a module granted to one of
+    somebody's designations must not appear while they are acting as another.
+    """
+    if not designations:
+        return {}
+    out: dict[str, set[str]] = {d: set() for d in designations}
+    rows = (IamDesignationModule.objects
+            .filter(designation__in=list(designations))
+            .values_list("designation", "module_code"))
+    for designation, code in rows:
+        out[designation].add(code)
+    return {d: sorted(codes) for d, codes in out.items()}
+
+
 def permissions_for(designations: Sequence[str]) -> list[str]:
     if not designations:
         return []
     return sorted(set(RolePermission.objects
                       .filter(designation__in=list(designations))
                       .values_list("permission", flat=True)))
+
+
+def build_navigation(module_codes: Sequence[str],
+                     permissions: Iterable[str]) -> list[dict]:
+    """Navigation, already filtered and already in render shape.
+
+    Spans every publisher, so one sidebar covers every Fusion app. The client
+    does no filtering — it cannot draw a module the IAM did not send.
+    """
+    perms = set(permissions)
+    granted = set(module_codes)
+    if not granted:
+        return []
+
+    sections: dict[str, list[dict]] = {}
+    modules = (IamModule.objects.filter(code__in=granted, status="active")
+               .prefetch_related("nav_items"))
+
+    for m in modules:
+        items = [
+            {"code": n.code, "label": n.label, "icon": n.icon, "to": n.to,
+             "app": m.app}
+            for n in m.nav_items.all()
+            if not n.required_permission or n.required_permission in perms
+        ]
+        if not items:
+            continue                     # a section that expands to nothing is worse
+                                         # than no section at all
+        entry = {"code": m.code, "label": m.label, "icon": m.icon, "app": m.app}
+        if len(items) == 1 and items[0]["to"] == m.base_path:
+            entry["to"] = items[0]["to"]     # single link — no pointless accordion
+        else:
+            entry["links"] = items
+        sections.setdefault(m.nav_section, []).append(entry)
+
+    # Two publishers can pick the same sort_order, so the tiebreak must be total.
+    for items in sections.values():
+        items.sort(key=lambda e: (e["app"], e["code"]))
+    return [{"section": s, "items": v} for s, v in sorted(sections.items())]
 
 
 def build_session(token: IamToken) -> dict:
@@ -148,6 +205,8 @@ def build_session(token: IamToken) -> dict:
     if user.kind not in roles:
         roles = [user.kind, *roles]
 
+    modules = modules_for(roles)
+    permissions = permissions_for(roles)
     payload = {
         "user": {
             "id": user.erp_user_id,
@@ -157,12 +216,17 @@ def build_session(token: IamToken) -> dict:
             "email": user.email,
         },
         "basic_role": user.kind,
-        # An office outranks the basic role as a default: a Junior Assistant
-        # should land in their office, not on the generic staff view.
-        "active_role": next((r for r in roles if r != user.kind), user.kind),
+        # Their own choice if it still holds, else an office outranks the basic role.
+        "active_role": (user.last_selected_role
+                        if user.last_selected_role in roles
+                        else next((r for r in roles if r != user.kind), user.kind)),
         "roles": roles,
-        "permissions": permissions_for(roles),
-        "modules": modules_for(roles),
+        "permissions": permissions,
+        "modules": modules,
+        # The same grants split by designation, for a shell with a role switcher.
+        "modules_by_role": modules_by_designation(roles),
+        # Spans every publisher, so one app can draw the whole sidebar.
+        "navigation": build_navigation(modules, permissions),
         "identity_synced_at": user.synced_at.isoformat(),
     }
     if user.kind == "student":
@@ -189,6 +253,9 @@ def _to_row(u: IamUser) -> dict:
         "batch_year": u.batch_year,
         # Consumers act on their projection, so it must be able to retire an account.
         "is_active": u.is_active,
+        # Maintained on the portal's profile page; read, never written, here.
+        "resume_link": u.resume_link,
+        "profile_completed": u.profile_completed,
     }
 
 

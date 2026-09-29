@@ -41,7 +41,7 @@ def academic(roll, cpi="8.0", **over):
     return row
 
 
-def fake_erp(users=(), designations=(), grants=(), academics=(),
+def fake_erp(users=(), designations=(), academics=(), profiles=None,
              programme_roles=()):
     """A stand-in for iam.erp_source with the same callables.
 
@@ -53,8 +53,8 @@ def fake_erp(users=(), designations=(), grants=(), academics=(),
         iter_users=lambda batch_size=500: iter([list(users)] if users else []),
         all_user_designations=lambda: list(designations),
         all_student_programme_roles=lambda: list(programme_roles),
-        all_designation_modules=lambda: list(grants),
         all_academic_standings=lambda: list(academics),
+        all_student_profiles=lambda: dict(profiles or {}),
         fetch_password_hash=lambda username: None,
     )
 
@@ -62,11 +62,10 @@ def fake_erp(users=(), designations=(), grants=(), academics=(),
 class SyncTests(TestCase):
     databases = {"default", "system_db"}
 
-    def test_projects_users_designations_and_grants(self):
+    def test_projects_users_and_designations(self):
         erp = fake_erp(
             users=[user(1, "alice"), user(2, "bob", kind="faculty")],
             designations=[(1, "student"), (2, "professor")],
-            grants=[("professor", "placement_cell"), ("student", "placement_cell")],
         )
         with patch.object(sync, "erp_source", erp):
             run = sync.sync_all()
@@ -75,7 +74,6 @@ class SyncTests(TestCase):
         self.assertEqual(run.users_seen, 2)
         self.assertEqual(IamUser.objects.count(), 2)
         self.assertEqual(IamUserDesignation.objects.count(), 2)
-        self.assertEqual(IamDesignationModule.objects.count(), 2)
 
         alice = IamUser.objects.get(pk=1)
         self.assertEqual(alice.username, "alice")
@@ -83,15 +81,13 @@ class SyncTests(TestCase):
         self.assertEqual(alice.batch_year, 2023)
 
     def test_running_twice_changes_nothing(self):
-        erp = fake_erp(users=[user(1, "alice")], designations=[(1, "student")],
-                       grants=[("student", "placement_cell")])
+        erp = fake_erp(users=[user(1, "alice")], designations=[(1, "student")])
         with patch.object(sync, "erp_source", erp):
             sync.sync_all()
             sync.sync_all()
 
         self.assertEqual(IamUser.objects.count(), 1)
         self.assertEqual(IamUserDesignation.objects.count(), 1)
-        self.assertEqual(IamDesignationModule.objects.count(), 1)
 
     def test_an_updated_user_is_overwritten_not_duplicated(self):
         with patch.object(sync, "erp_source", fake_erp(users=[user(1, "alice")])):
@@ -124,42 +120,23 @@ class SyncTests(TestCase):
                    .values_list("designation", flat=True))
         self.assertEqual(held, {"student"})
 
-    def test_a_revoked_module_grant_actually_disappears(self):
-        with patch.object(sync, "erp_source",
-                          fake_erp(users=[user(1, "alice")],
-                                   grants=[("student", "placement_cell"),
-                                           ("student", "hr")])):
-            sync.sync_all()
-        with patch.object(sync, "erp_source",
-                          fake_erp(users=[user(1, "alice")],
-                                   grants=[("student", "placement_cell")])):
-            sync.sync_all()
+    def test_the_sync_never_touches_module_grants(self):
+        """Grants come from each service's manifest, and from nowhere else.
 
-        granted = set(IamDesignationModule.objects.filter(designation="student")
-                      .values_list("module_code", flat=True))
-        self.assertEqual(granted, {"placement_cell"})
-
-    def test_the_sync_leaves_manifest_granted_modules_alone(self):
-        """Two writers share this table, and the ERP is not authoritative here.
-
-        A service declares its own modules and seeds them as `manifest`. If the
-        projection deleted by module code rather than by source, a code the ERP
-        also happens to know — `examinations` is both a globals_moduleaccess
-        column and a Fusion-Academic module — would lose every grant the ERP
-        does not repeat, silently, on the next sync.
+        The ERP projection used to write them too, and the union of two writers
+        could only ever widen access. One writer per module is what makes a
+        revoke actually revoke.
         """
         IamDesignationModule.objects.create(
             designation="faculty", module_code="examinations",
-            source=IamDesignationModule.MANIFEST)
+            source="manifest:legacy")
 
-        with patch.object(sync, "erp_source",
-                          fake_erp(users=[user(1, "alice")],
-                                   grants=[("student", "examinations")])):
+        with patch.object(sync, "erp_source", fake_erp(users=[user(1, "alice")])):
             sync.sync_all()
 
-        granted = set(IamDesignationModule.objects.filter(
-            module_code="examinations").values_list("designation", flat=True))
-        self.assertEqual(granted, {"faculty", "student"})
+        rows = set(IamDesignationModule.objects.values_list(
+            "designation", "module_code", "source"))
+        self.assertEqual(rows, {("faculty", "examinations", "manifest:legacy")})
 
     def test_a_vanished_user_is_deactivated_never_deleted(self):
         """Applications and audit rows reference the id; a hard delete would
@@ -268,8 +245,45 @@ class FakeMatchesReal(TestCase):
         # The fake need not offer helpers the sync never calls, only the ones it
         # already stands in for plus anything newly added beside them.
         missing = {n for n in used if n in {
-            "iter_users", "all_user_designations", "all_designation_modules",
+            "iter_users", "all_user_designations", "all_student_profiles",
             "all_academic_standings", "fetch_password_hash",
             "all_student_programme_roles",
         }} - offered
         self.assertEqual(missing, set())
+
+
+class StudentProfileProjectionTests(TestCase):
+    databases = {"default", "system_db"}
+
+    def test_the_resume_the_portal_holds_is_projected(self):
+        """One resume, maintained on the portal's profile page and read here."""
+        erp = fake_erp(users=[user(1, "alice")],
+                       profiles={1: {"resume_link": "https://drive/x",
+                                     "profile_completed": True}})
+        with patch.object(sync, "erp_source", erp):
+            sync.sync_all()
+
+        alice = IamUser.objects.get(pk=1)
+        self.assertEqual(alice.resume_link, "https://drive/x")
+        self.assertTrue(alice.profile_completed)
+
+    def test_a_student_with_no_record_upstream_gets_no_resume(self):
+        with patch.object(sync, "erp_source", fake_erp(users=[user(1, "alice")])):
+            sync.sync_all()
+        alice = IamUser.objects.get(pk=1)
+        self.assertEqual(alice.resume_link, "")
+        self.assertFalse(alice.profile_completed)
+
+    def test_a_removed_resume_is_cleared_not_kept(self):
+        """A stale link is worse than none: a recruiter would open the old CV."""
+        with patch.object(sync, "erp_source",
+                          fake_erp(users=[user(1, "alice")],
+                                   profiles={1: {"resume_link": "https://drive/x",
+                                                 "profile_completed": True}})):
+            sync.sync_all()
+        with patch.object(sync, "erp_source",
+                          fake_erp(users=[user(1, "alice")],
+                                   profiles={1: {"resume_link": "",
+                                                 "profile_completed": False}})):
+            sync.sync_all()
+        self.assertEqual(IamUser.objects.get(pk=1).resume_link, "")
