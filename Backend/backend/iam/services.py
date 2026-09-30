@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db.models import Q
 from django.utils import timezone
@@ -99,7 +100,30 @@ def authenticate(username: str, password: str, *, ip: str | None = None):
         return None
 
     LoginAttempt.objects.create(username=username, ip=ip, outcome="success")
+    _refresh_roles_if_stale(user)
     return IamToken.issue(erp_user_id=user.erp_user_id, username=user.username)
+
+
+def _refresh_roles_if_stale(user: IamUser) -> None:
+    """Re-read one person's posts, but only when the timer has fallen behind.
+
+    Login is the wrong place to spend nine queries every time. With the sync
+    timer running this row is minutes old and the refresh would find nothing,
+    so it is skipped and login costs nothing extra. It happens only once the
+    projection is older than the window it is meant to hold to — which is
+    exactly when a post assigned today would otherwise be invisible.
+    """
+    after = getattr(settings, "IAM_REFRESH_ROLES_AFTER_SECONDS", 1800)
+    if not after:
+        return
+    if user.synced_at and (timezone.now() - user.synced_at).total_seconds() < after:
+        return
+
+    from iam.sync import refresh_designations
+
+    if refresh_designations(user.erp_user_id) is not None:
+        # Stamped so a stalled sync does not make every login pay again.
+        IamUser.objects.filter(pk=user.pk).update(synced_at=timezone.now())
 
 
 def resolve_token(raw: str) -> IamToken | None:
@@ -191,6 +215,19 @@ def build_navigation(module_codes: Sequence[str],
     return [{"section": s, "items": v} for s, v in sorted(sections.items())]
 
 
+def navigation_by_designation(designations: Sequence[str]) -> dict[str, list[dict]]:
+    """Each designation's own sidebar, built from that designation alone.
+
+    The union would leak: somebody who is both a student and an office holder
+    would see the student's own screens while acting as the office, because the
+    module is granted to both and the items were filtered against every
+    permission they hold rather than the ones the acting role carries.
+    """
+    modules = modules_by_designation(designations)
+    return {d: build_navigation(modules.get(d, []), permissions_for([d]))
+            for d in designations}
+
+
 def build_session(token: IamToken) -> dict:
     """The /me payload. Four queries against system_db, zero against the ERP."""
     user = IamUser.objects.filter(erp_user_id=token.erp_user_id).first()
@@ -227,6 +264,8 @@ def build_session(token: IamToken) -> dict:
         "modules_by_role": modules_by_designation(roles),
         # Spans every publisher, so one app can draw the whole sidebar.
         "navigation": build_navigation(modules, permissions),
+        # The same sidebar split by designation, for a shell with a role switcher.
+        "navigation_by_role": navigation_by_designation(roles),
         "identity_synced_at": user.synced_at.isoformat(),
     }
     if user.kind == "student":

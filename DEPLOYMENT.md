@@ -174,6 +174,36 @@ sudo systemctl enable --now fusion-sysadmin
 Requirements on the box: `pg_dump`/`pg_restore` on `PATH` (backup/restore), and both
 databases present.
 
+### 3b. The identity sync — install the timer, it is not built in
+
+Nothing in this service schedules `sync_identity`; the APScheduler here runs backups
+only. Without a timer the projection freezes, and the symptom is not an error — it is
+a designation assigned this morning that never reaches any service.
+
+```bash
+sudo cp Backend/ops/systemd/fusion-iam-*.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fusion-iam-sync.timer fusion-iam-freshness.timer
+systemctl list-timers 'fusion-iam-*'
+```
+
+- **`fusion-iam-sync.timer`** — every 10 minutes, `Persistent=true` so it catches up
+  after downtime rather than leaving an hour-old projection.
+- **`fusion-iam-freshness.timer`** — every 15 minutes, runs
+  `sync_identity --status --max-age 1800`, which **exits 1** past the limit. Point the
+  monitor at `systemctl is-failed fusion-iam-freshness`: a dead sync timer is silent
+  otherwise, and silence is the failure mode that costs you a day.
+
+A run that would deactivate more than 2% of the people it just read is **refused**,
+because a truncated ERP read looks exactly like a mass resignation. The unit fails,
+the next tick retries, and nobody is locked out. If the departure is genuine, run it
+once by hand with `--force-deactivate`.
+
+Two things do not need the timer, by design: a **password** changed in the ERP works
+at the next login (the hash check falls back to a live read and repairs the copy), and
+a **designation** is re-read on login as well. The timer is what keeps everyone else's
+rows current between logins.
+
 ### 4. Frontend build
 ```bash
 cd client

@@ -58,6 +58,9 @@ def fake_erp(users=(), designations=(), academics=(), profiles=None,
         all_academic_standings=lambda: list(academics),
         all_student_profiles=lambda: dict(profiles or {}),
         fetch_password_hash=lambda username: None,
+        designations_for_user=lambda uid: [p for p in (*designations,
+                                                       *programme_roles)
+                                           if p[0] == uid],
     )
 
 
@@ -228,6 +231,105 @@ class SyncTests(TestCase):
                                    designations=[(1, "student"), (1, "student")])):
             run = sync.sync_all()
         self.assertEqual(run.designations_written, 1)
+
+
+class DeactivationGuardTests(TestCase):
+    """A truncated ERP read must not be mistaken for a mass resignation."""
+    databases = {"default", "system_db"}
+
+    def _populate(self, n):
+        IamUser.objects.bulk_create(
+            [IamUser(**user(i, f"u{i}")) for i in range(1, n + 1)])
+
+    def test_a_read_that_lost_most_of_the_people_is_refused(self):
+        self._populate(200)
+        erp = fake_erp(users=[user(i, f"u{i}") for i in range(1, 51)])
+        with patch.object(sync, "erp_source", erp):
+            with self.assertRaises(sync.SuspectDeactivation):
+                sync.sync_all()
+        # Nothing was deactivated: the refusal comes before the update.
+        self.assertEqual(IamUser.objects.filter(is_active=True).count(), 200)
+
+    def test_a_plausible_handful_still_goes_through(self):
+        self._populate(2000)
+        erp = fake_erp(users=[user(i, f"u{i}") for i in range(1, 1991)])
+        with patch.object(sync, "erp_source", erp):
+            run = sync.sync_all()
+        self.assertEqual(run.status, "succeeded")
+        self.assertEqual(run.deactivated, 10)
+
+    def test_a_small_installation_is_judged_by_count_not_share(self):
+        """Ten of forty is 25%, but ten people is not a truncated read."""
+        self._populate(40)
+        erp = fake_erp(users=[user(i, f"u{i}") for i in range(1, 31)])
+        with patch.object(sync, "erp_source", erp):
+            run = sync.sync_all()
+        self.assertEqual(run.deactivated, 10)
+
+    def test_the_operator_can_override_a_genuine_mass_departure(self):
+        self._populate(200)
+        erp = fake_erp(users=[user(i, f"u{i}") for i in range(1, 51)])
+        with patch.object(sync, "erp_source", erp):
+            run = sync.sync_all(force_deactivate=True)
+        self.assertEqual(run.deactivated, 150)
+
+    def test_keeping_missing_users_skips_the_question_entirely(self):
+        self._populate(200)
+        erp = fake_erp(users=[user(i, f"u{i}") for i in range(1, 51)])
+        with patch.object(sync, "erp_source", erp):
+            run = sync.sync_all(deactivate_missing=False)
+        self.assertEqual(run.deactivated, 0)
+        self.assertEqual(IamUser.objects.filter(is_active=True).count(), 200)
+
+
+class RefreshDesignationsTests(TestCase):
+    """A post assigned since the last sync must not wait for the next one."""
+    databases = {"default", "system_db"}
+
+    def setUp(self):
+        IamUser.objects.create(**user(1, "asha", kind="staff"))
+        IamUserDesignation.objects.create(erp_user_id=1, designation="staff")
+
+    def test_a_newly_held_post_appears_without_a_full_sync(self):
+        erp = fake_erp(designations=[(1, "staff"), (1, "acadadmin")])
+        with patch.object(sync, "erp_source", erp):
+            self.assertEqual(sync.refresh_designations(1), 2)
+        self.assertEqual(
+            sorted(IamUserDesignation.objects.filter(erp_user_id=1)
+                   .values_list("designation", flat=True)),
+            ["acadadmin", "staff"])
+
+    def test_a_revoked_post_disappears(self):
+        IamUserDesignation.objects.create(erp_user_id=1, designation="acadadmin")
+        erp = fake_erp(designations=[(1, "staff")])
+        with patch.object(sync, "erp_source", erp):
+            sync.refresh_designations(1)
+        self.assertEqual(
+            list(IamUserDesignation.objects.filter(erp_user_id=1)
+                 .values_list("designation", flat=True)),
+            ["staff"])
+
+    def test_another_persons_designations_are_left_alone(self):
+        IamUser.objects.create(**user(2, "bob"))
+        IamUserDesignation.objects.create(erp_user_id=2, designation="student")
+        erp = fake_erp(designations=[(1, "acadadmin")])
+        with patch.object(sync, "erp_source", erp):
+            sync.refresh_designations(1)
+        self.assertTrue(
+            IamUserDesignation.objects.filter(erp_user_id=2,
+                                              designation="student").exists())
+
+    def test_an_unreachable_erp_leaves_the_projection_as_it_was(self):
+        def boom(_uid):
+            raise RuntimeError("ERP went away")
+
+        erp = fake_erp()
+        erp.designations_for_user = boom
+        with patch.object(sync, "erp_source", erp):
+            self.assertIsNone(sync.refresh_designations(1))
+        self.assertTrue(
+            IamUserDesignation.objects.filter(erp_user_id=1,
+                                              designation="staff").exists())
 
 
 class FakeMatchesReal(TestCase):

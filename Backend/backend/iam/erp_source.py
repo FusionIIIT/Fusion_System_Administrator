@@ -16,14 +16,11 @@ from decimal import Decimal
 
 from api.models.erp import (AuthUser, CourseReplacement, GlobalsDesignation,
                             GlobalsExtrainfo, GlobalsHoldsdesignation,
-                            GlobalsModuleaccess, PhdStudentBatchUpload,
-                            PublishedResultStudent, ResultAnnouncement, Student,
-                            StudentGrade)
+                            PhdStudentBatchUpload, PublishedResultStudent,
+                            ResultAnnouncement, Student, StudentGrade)
 from api.models.batches import StudentBatchUpload
 from iam import grades
 
-# globals_moduleaccess column -> platform module code. Anything not listed is
-# not exposed by the platform, even if the column exists.
 
 def iter_users(batch_size: int = 500) -> Iterator[list[dict]]:
     """Every ERP user, in batches, with their identity fields flattened.
@@ -126,6 +123,25 @@ def fetch_password_hash(username: str) -> str | None:
     password changed in the ERP works before the next sync lands."""
     return (AuthUser.objects.filter(username__iexact=username)
             .values_list("password", flat=True).first())
+
+
+def designations_for_user(erp_user_id: int) -> list[tuple[int, str]]:
+    """One user's currently-held designations, live — the single-user form of
+    `all_user_designations` plus `all_student_programme_roles`."""
+    names = dict(GlobalsDesignation.objects.values_list("id", "name"))
+    held = [
+        (erp_user_id, names[designation_id])
+        for designation_id in GlobalsHoldsdesignation.objects
+        .filter(working_id=erp_user_id).values_list("designation_id", flat=True)
+        if designation_id in names
+    ]
+    category = (Student.objects
+                .filter(id__user_id=erp_user_id, batch_id__isnull=False)
+                .values_list("batch_id__curriculum__programme__category",
+                             flat=True).first())
+    if category in PROGRAMME_ROLES:
+        held.append((erp_user_id, PROGRAMME_ROLES[category]))
+    return held
 
 
 # -- Declared academic standing (CPI), for placement eligibility -------------

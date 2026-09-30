@@ -11,9 +11,9 @@ from django.test import TestCase
 from django.utils import timezone
 
 from iam import services
-from iam.models import (IamDesignationModule, IamToken, IamUser,
-                        IamUserDesignation, LoginAttempt, RolePermission,
-                        SyncRun)
+from iam.models import (IamDesignationModule, IamModule, IamNavItem, IamToken,
+                        IamUser, IamUserDesignation, LoginAttempt,
+                        RolePermission, SyncRun)
 
 PASSWORD = "correct-horse-battery"
 
@@ -175,6 +175,130 @@ class SessionTests(TestCase):
         self.assertEqual(s["modules"], [])
         self.assertEqual(s["permissions"], [])
         self.assertEqual(s["active_role"], "staff")
+
+
+class LoginRefreshesRolesTests(TestCase):
+    """A newly assigned post must appear — without making every login pay."""
+    databases = {"default", "system_db"}
+
+    def setUp(self):
+        self.user = make_user(uid=11, username="asha")
+
+    def _age(self, seconds):
+        IamUser.objects.filter(pk=11).update(
+            synced_at=timezone.now() - timedelta(seconds=seconds))
+
+    def test_a_fresh_projection_costs_the_login_nothing(self):
+        """The timer ran minutes ago, so the refresh would find nothing."""
+        self._age(60)
+        with patch("iam.sync.refresh_designations") as refresh:
+            self.assertIsNotNone(services.authenticate("asha", PASSWORD))
+        refresh.assert_not_called()
+
+    def test_a_stalled_timer_makes_login_re_read_the_posts(self):
+        self._age(7200)
+        with patch("iam.sync.refresh_designations", return_value=2) as refresh:
+            services.authenticate("asha", PASSWORD)
+        refresh.assert_called_once_with(11)
+
+    def test_a_successful_refresh_is_not_repeated_on_the_next_login(self):
+        self._age(7200)
+        with patch("iam.sync.refresh_designations", return_value=2):
+            services.authenticate("asha", PASSWORD)
+        with patch("iam.sync.refresh_designations") as again:
+            services.authenticate("asha", PASSWORD)
+        again.assert_not_called()
+
+    def test_an_unreachable_erp_still_lets_the_person_in(self):
+        self._age(7200)
+        with patch("iam.sync.refresh_designations", return_value=None):
+            self.assertIsNotNone(services.authenticate("asha", PASSWORD))
+
+    def test_a_failed_login_does_not_touch_the_projection(self):
+        self._age(7200)
+        with patch("iam.sync.refresh_designations") as refresh:
+            self.assertIsNone(services.authenticate("asha", "wrong-password"))
+        refresh.assert_not_called()
+
+    def test_the_refresh_can_be_turned_off_entirely(self):
+        self._age(7200)
+        with self.settings(IAM_REFRESH_ROLES_AFTER_SECONDS=0):
+            with patch("iam.sync.refresh_designations") as refresh:
+                services.authenticate("asha", PASSWORD)
+        refresh.assert_not_called()
+
+
+class RoleScopedNavigationTests(TestCase):
+    """A module granted to two of somebody's roles must not show one role's
+    screens while they are acting as the other."""
+    databases = {"default", "system_db"}
+
+    def setUp(self):
+        make_user(uid=9, username="vikrant")
+        IamUserDesignation.objects.create(erp_user_id=9, designation="acadadmin")
+        for designation in ("student", "acadadmin"):
+            IamDesignationModule.objects.create(designation=designation,
+                                                module_code="placement_cell")
+        IamDesignationModule.objects.create(designation="acadadmin",
+                                            module_code="leave")
+        RolePermission.objects.create(designation="student",
+                                      permission="placement_cell.application.apply")
+        RolePermission.objects.create(designation="acadadmin",
+                                      permission="placement_cell.application.view")
+        RolePermission.objects.create(designation="acadadmin",
+                                      permission="leave.request.create")
+
+        placement = IamModule.objects.create(
+            code="placement_cell", label="Placement Cell", base_path="/placement",
+            nav_section="Placement", status="active", app="integrated",
+            source="manifest:integrated")
+        IamNavItem.objects.create(
+            module=placement, code="placement.mine", label="My Applications",
+            to="/placement/mine", source="manifest:integrated",
+            required_permission="placement_cell.application.apply")
+        IamNavItem.objects.create(
+            module=placement, code="placement.applications", label="Applications",
+            to="/placement/applications", source="manifest:integrated",
+            required_permission="placement_cell.application.view")
+        leave = IamModule.objects.create(
+            code="leave", label="Leave", base_path="/leave", nav_section="Leave",
+            status="active", app="integrated", source="manifest:integrated")
+        IamNavItem.objects.create(
+            module=leave, code="leave.apply", label="Apply", to="/leave/apply",
+            source="manifest:integrated",
+            required_permission="leave.request.create")
+
+    def _links(self, navigation, module_code):
+        for section in navigation:
+            for item in section["items"]:
+                if item["code"] == module_code:
+                    return [link["code"] for link in item.get("links", [])]
+        return None
+
+    def test_an_office_does_not_draw_the_student_screens(self):
+        by_role = services.navigation_by_designation(["student", "acadadmin"])
+        self.assertEqual(self._links(by_role["acadadmin"], "placement_cell"),
+                         ["placement.applications"])
+
+    def test_a_student_does_not_draw_the_office_screens(self):
+        by_role = services.navigation_by_designation(["student", "acadadmin"])
+        self.assertEqual(self._links(by_role["student"], "placement_cell"),
+                         ["placement.mine"])
+
+    def test_a_module_granted_to_one_role_is_absent_from_the_other(self):
+        by_role = services.navigation_by_designation(["student", "acadadmin"])
+        self.assertIsNone(self._links(by_role["student"], "leave"))
+        self.assertIsNotNone(self._links(by_role["acadadmin"], "leave"))
+
+    def test_the_session_carries_the_breakdown_beside_the_union(self):
+        token = IamToken.issue(erp_user_id=9, username="vikrant")
+        session = services.build_session(token)
+        self.assertEqual(sorted(session["navigation_by_role"]),
+                         ["acadadmin", "student"])
+        self.assertEqual(
+            self._links(session["navigation_by_role"]["acadadmin"],
+                        "placement_cell"),
+            ["placement.applications"])
 
 
 class DirectoryTests(TestCase):

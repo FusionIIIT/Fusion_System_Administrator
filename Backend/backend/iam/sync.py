@@ -29,8 +29,43 @@ USER_FIELDS = ["username", "display_name", "email", "kind", "is_active",
 COMPUTED_BY = "iam-replica/v1"
 
 
-def sync_all(*, batch_size: int = 500, deactivate_missing: bool = True) -> SyncRun:
-    """Project every ERP user, designation and module grant into IAM."""
+#: A run that would retire more than this share of the people it just read is
+#: treated as a bad read, not as 1,500 resignations. Overridable per run.
+MAX_DEACTIVATION_SHARE = 0.02
+#: Below this, share is meaningless — a small ERP legitimately loses a few.
+DEACTIVATION_FLOOR = 25
+
+
+class SuspectDeactivation(RuntimeError):
+    """Raised instead of deactivating implausibly many users at once."""
+
+
+def _guard_deactivation(doomed: int, seen: int, *, force: bool) -> None:
+    """Refuse a mass deactivation that looks like a truncated read.
+
+    `seen` being non-empty is not evidence the read was complete: a filter that
+    silently drops rows, a LIMIT, or a join that loses a table leaves a partial
+    set, and everyone missing from it would be locked out on the next login.
+    The failure is invisible until people ring up, so it fails loudly here.
+    """
+    if force or doomed <= DEACTIVATION_FLOOR:
+        return
+    if doomed <= (seen + doomed) * MAX_DEACTIVATION_SHARE:
+        return
+    raise SuspectDeactivation(
+        f"{doomed} of {seen + doomed} users would be deactivated, over the "
+        f"{MAX_DEACTIVATION_SHARE:.0%} limit. The ERP read is more likely "
+        f"truncated than that many people having left. Re-run with "
+        f"--force-deactivate if it is genuine.")
+
+
+def sync_all(*, batch_size: int = 500, deactivate_missing: bool = True,
+             force_deactivate: bool = False) -> SyncRun:
+    """Project every ERP user, designation and academic standing into IAM.
+
+    Module grants are not projected: they are published by each service's
+    manifest and seeded by seed_iam_permissions, so the ERP has no say.
+    """
     run = SyncRun.objects.create()
     try:
         seen: set[int] = set()
@@ -66,10 +101,11 @@ def sync_all(*, batch_size: int = 500, deactivate_missing: bool = True) -> SyncR
             # A user who vanished from the ERP is deactivated, never deleted:
             # placement applications and audit rows reference the id, and a
             # hard delete would leave them dangling.
-            run.deactivated = (IamUser.objects
-                               .exclude(erp_user_id__in=seen)
-                               .filter(is_active=True)
-                               .update(is_active=False))
+            doomed = (IamUser.objects
+                      .exclude(erp_user_id__in=seen)
+                      .filter(is_active=True))
+            _guard_deactivation(doomed.count(), len(seen), force=force_deactivate)
+            run.deactivated = doomed.update(is_active=False)
 
         run.status = "succeeded"
     except Exception as exc:                                   # noqa: BLE001
@@ -195,3 +231,43 @@ def refresh_password_hash(username: str) -> str | None:
         IamUser.objects.filter(username__iexact=username).update(
             password_hash=fresh, synced_at=timezone.now())
     return fresh
+
+
+def refresh_designations(erp_user_id: int) -> int | None:
+    """Re-pull one user's designations, live.
+
+    A password changed in the ERP takes effect at the next login because the
+    hash check falls back to a live read. A designation had no such path, so a
+    post assigned this morning stayed invisible to every service until somebody
+    remembered to run the sync. Called at login, which is both the moment the
+    answer matters and rare enough to afford two ERP queries.
+
+    Returns the number of designations now held, or None if the ERP could not
+    be read — the caller keeps the projection it already has, which is the same
+    behaviour as never having asked.
+    """
+    try:
+        pairs = erp_source.designations_for_user(erp_user_id)
+    except Exception:                                          # noqa: BLE001
+        log.exception("iam.sync.refresh_designations_failed uid=%s", erp_user_id)
+        return None
+
+    identity = dict(IamUser.objects.filter(erp_user_id=erp_user_id)
+                    .values_list("erp_user_id", "kind"))
+    usernames = dict(IamUser.objects.filter(erp_user_id=erp_user_id)
+                     .values_list("erp_user_id", "username"))
+    found = rbac.violations(pairs, identity, usernames)
+    enforcing = getattr(settings, "IAM_ENFORCE_ROLE_POLICY", False)
+    allowed = rbac.exceptions()
+    refused = {(v["erp_user_id"], v["designation"]) for v in found
+               if enforcing
+               and (v["username"], v["designation"]) not in allowed}
+
+    rows = [IamUserDesignation(erp_user_id=uid, designation=name)
+            for uid, name in set(pairs) if (uid, name) not in refused]
+    with transaction.atomic(using="system_db"):
+        # Replaced wholesale for the same reason the full sync does it: a
+        # designation taken away is the change that matters.
+        IamUserDesignation.objects.filter(erp_user_id=erp_user_id).delete()
+        IamUserDesignation.objects.bulk_create(rows)
+    return len(rows)
