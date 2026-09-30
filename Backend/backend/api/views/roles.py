@@ -120,10 +120,12 @@ def add_designation(request):
             'designation' : role.name,
             'program_and_curriculum' : False,
             'course_registration' : False,
+            'thesis_research' : False,
             'course_management' : False,
             'other_academics' : False,
             'spacs' : False,
             'department' : False,
+            'database' : False,
             'examinations' : False,
             'hr' : False,
             'iwd' : False,
@@ -140,8 +142,13 @@ def add_designation(request):
             'inventory_management': False,
         }
         module_serializer = GlobalsModuleaccessSerializer(data=data)
-        if module_serializer.is_valid():
-            module_serializer.save()
+        if not module_serializer.is_valid():
+            # The role itself was already created; say so, rather than a 201
+            # that implies module access exists when the row never saved.
+            return Response(
+                {'role': serializer.data, 'modules_error': module_serializer.errors},
+                status.HTTP_207_MULTI_STATUS)
+        module_serializer.save()
         return Response({'role': serializer.data, 'modules': module_serializer.data}, status.HTTP_201_CREATED)
     else :
         return Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
