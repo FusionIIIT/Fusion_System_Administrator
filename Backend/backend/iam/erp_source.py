@@ -11,6 +11,7 @@ a request no longer requires the ERP to be up.
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from decimal import Decimal
 
@@ -20,6 +21,9 @@ from api.models.erp import (AuthUser, CourseReplacement, GlobalsDesignation,
                             ResultAnnouncement, Student, StudentGrade)
 from api.models.batches import StudentBatchUpload
 from iam import grades
+
+
+log = logging.getLogger("fusion.iam.erp_source")
 
 
 def iter_users(batch_size: int = 500) -> Iterator[list[dict]]:
@@ -235,13 +239,23 @@ def all_student_profiles() -> dict[int, dict]:
 
     Keyed by erp_user_id. The portal's profile page is the only place these are
     written, so nothing downstream needs a second copy of them.
+
+    Best-effort per table: a fixture that carries the core ERP tables but not
+    these two (the public dev dump is exactly this) must not fail the whole
+    sync over a feature it cannot demonstrate. Every other user, designation
+    and standing still projects; these two fields are merely absent.
     """
     out: dict[int, dict] = {}
     # The two tables name the same column differently; each is mapped as it is.
     for model, column in ((StudentBatchUpload, "user_id"),
                           (PhdStudentBatchUpload, "user_account_id")):
-        rows = (model.objects.exclude(**{f"{column}__isnull": True})
-                .values_list(column, "resume_link", "profile_completed"))
+        try:
+            rows = list(model.objects.exclude(**{f"{column}__isnull": True})
+                       .values_list(column, "resume_link", "profile_completed"))
+        except Exception:
+            log.warning("iam.sync.profiles_table_unavailable model=%s",
+                       model._meta.db_table, exc_info=True)
+            continue
         for user_id, resume, completed in rows:
             out[user_id] = {"resume_link": (resume or "").strip(),
                             "profile_completed": bool(completed)}
