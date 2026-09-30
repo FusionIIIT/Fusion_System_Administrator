@@ -13,6 +13,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from iam import sync
+from iam.tests.erp_fixture import ErpFactory, ErpSchemaTestCase
 from iam.models import (IamDesignationModule, IamRole, IamRoleViolation,
                         IamUser,
                         IamUserAcademic,
@@ -391,6 +392,48 @@ class StudentProfileProjectionTests(TestCase):
                                                  "profile_completed": False}})):
             sync.sync_all()
         self.assertEqual(IamUser.objects.get(pk=1).resume_link, "")
+
+
+class MissingProfileTableTests(ErpSchemaTestCase):
+    """The public dev dump carries the core ERP tables but not these two — the
+    exact fixture a lab restores. Absence of a table this projection reads must
+    degrade the two fields it fills, not fail the sync that projects everyone.
+
+    A regression: this projection used to run unguarded as the first step of
+    sync_all, so one table a fixture happened not to carry took every user
+    down with it, on a database that otherwise had everything it needed.
+    """
+
+    def setUp(self):
+        self.erp = ErpFactory(seed=7)
+
+    def test_the_other_table_still_contributes(self):
+        from django.db.utils import ProgrammingError
+
+        from iam import erp_source
+
+        with patch("api.models.batches.StudentBatchUpload.objects") as broken:
+            broken.exclude.side_effect = ProgrammingError(
+                'relation "programme_curriculum_studentbatchupload" does not exist')
+            profiles = erp_source.all_student_profiles()
+
+        self.assertIsInstance(profiles, dict)
+
+    def test_sync_identity_still_projects_every_user(self):
+        student = self.erp.student()
+        faculty = self.erp.employee(kind="faculty", department="CSE")
+
+        from django.db.utils import ProgrammingError
+
+        with patch("api.models.batches.StudentBatchUpload.objects") as broken:
+            broken.exclude.side_effect = ProgrammingError("relation does not exist")
+            run = sync.sync_all()
+
+        self.assertEqual(run.status, "succeeded")
+        self.assertTrue(IamUser.objects.filter(pk=student.id).exists())
+        self.assertTrue(IamUser.objects.filter(pk=faculty.id).exists())
+        # The field this table would have filled is simply absent, not an error.
+        self.assertEqual(IamUser.objects.get(pk=student.id).resume_link, "")
 
 
 class RolePolicyExceptionTests(TestCase):
