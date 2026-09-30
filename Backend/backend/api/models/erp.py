@@ -178,10 +178,14 @@ class GlobalsModuleaccess(models.Model):
     designation = models.CharField(max_length=155)
     program_and_curriculum = models.BooleanField()
     course_registration = models.BooleanField()
+    # Both NOT NULL on the real table; missing here meant a new designation
+    # could not be created at all, since the shadow model had no field to set.
+    thesis_research = models.BooleanField()
     course_management = models.BooleanField()
     other_academics = models.BooleanField()
     spacs = models.BooleanField()
     department = models.BooleanField()
+    database = models.BooleanField()
     examinations = models.BooleanField()
     hr = models.BooleanField()
     iwd = models.BooleanField()
