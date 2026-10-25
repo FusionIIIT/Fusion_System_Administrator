@@ -144,7 +144,7 @@ def add_individual_staff(request):
         'id' : staff_id,
     }
 
-    staff_serializer = GlobalsFacultySerializer(data=staff_data)
+    staff_serializer = StaffSerializer(data=staff_data)
     if staff_serializer.is_valid():
         staff_serializer.save()
     else:
