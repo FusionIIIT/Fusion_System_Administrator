@@ -200,6 +200,25 @@ def get_or_create_discipline(discipline_name):
     return Discipline.objects.create(name=canonical, acronym=DISCIPLINE_ACRONYM.get(canonical, canonical[:10]))
 
 
+def find_discipline(discipline_name):
+    normalized = (discipline_name or "").strip()
+    if not normalized:
+        return None
+    lower = normalized.lower()
+    canonical = next((v for k, v in DISCIPLINE_ALIASES.items() if k in lower), normalized)
+    return Discipline.objects.filter(Q(name__iexact=canonical) | Q(name__iexact=normalized) | Q(acronym__iexact=normalized)).first()
+
+
+def batch_name_for(discipline_name, specialization, programme_type):
+    if programme_type == "pg" and specialization:
+        if "design" in discipline_name.lower():
+            return "M.Des"
+        if specialization == "Mechatronics":
+            return "M.Tech"
+        return f"M.Tech {specialization}"
+    return batch_name_from_discipline(discipline_name, programme_type)
+
+
 def available_curriculums(batch):
     if not batch:
         return []
@@ -225,11 +244,42 @@ def curriculum_display(batch):
     return "No curriculum assigned"
 
 
+def batch_programme_type(batch):
+    return "ug" if batch.name.startswith("B.") else "pg" if batch.name.startswith("M.") else "phd"
+
+
+def batch_roster(batch, specialization=None):
+    students = StudentBatchUpload.objects.filter(year=batch.year, programme_type=batch_programme_type(batch))
+    discipline = batch.discipline
+    if batch_programme_type(batch) == "pg" and specialization:
+        return students.filter(specialization__icontains=specialization)
+    if discipline is not None:
+        discipline_name = discipline.name
+        discipline_filter = Q(branch__icontains=discipline_name)
+        if "Computer Science" in discipline_name:
+            discipline_filter |= Q(branch__icontains="CSE") | Q(branch__icontains="Computer Science")
+        elif "Electronics" in discipline_name:
+            discipline_filter |= Q(branch__icontains="ECE") | Q(branch__icontains="Electronics")
+        elif "Mechanical" in discipline_name:
+            discipline_filter |= Q(branch__icontains="ME") | Q(branch__icontains="Mechanical")
+        students = students.filter(discipline_filter)
+    return students
+
+
 def filled_seats(batch):
-    try:
-        return Student.objects.filter(batch_id=batch).count() if batch.curriculum else 0
-    except Exception:
-        return 0
+    return batch_roster(batch).count()
+
+
+def reserve_seat(batch):
+    """Lock the batch row and refuse the insert once its seats are taken. Call inside transaction.atomic()."""
+    locked = Batch.objects.select_for_update().select_related("discipline").get(id=batch.id)
+    total = locked.total_seats or 0
+    if total > 0 and filled_seats(locked) >= total:
+        raise ServiceError({
+            "success": False,
+            "message": f"No seats left in {locked.name} {locked.discipline.acronym} {locked.year}: all {total} seats are filled.",
+            "validation_error": "batch_full",
+        })
 
 
 def branch_code(branch_name, programme_type):
@@ -518,22 +568,8 @@ def batch_students(batch_id, specialization=None):
     if not batch:
         raise ServiceError({"success": False, "message": f"Batch with ID {batch_id} not found"}, status=404)
 
-    programme_type = "ug" if batch.name.startswith("B.") else "pg" if batch.name.startswith("M.") else "phd"
-    students = StudentBatchUpload.objects.filter(year=batch.year, programme_type=programme_type).defer("section")
-
+    students = batch_roster(batch, specialization).defer("section")
     discipline = batch.discipline
-    if programme_type == "pg" and specialization:
-        students = students.filter(specialization__icontains=specialization)
-    elif discipline is not None:
-        discipline_name = discipline.name
-        discipline_filter = Q(branch__icontains=discipline_name)
-        if "Computer Science" in discipline_name:
-            discipline_filter |= Q(branch__icontains="CSE") | Q(branch__icontains="Computer Science")
-        elif "Electronics" in discipline_name:
-            discipline_filter |= Q(branch__icontains="ECE") | Q(branch__icontains="Electronics")
-        elif "Mechanical" in discipline_name:
-            discipline_filter |= Q(branch__icontains="ME") | Q(branch__icontains="Mechanical")
-        students = students.filter(discipline_filter)
 
     try:
         rows = []
@@ -687,15 +723,7 @@ def save_students(data):
         discipline_name = student_data.get("Discipline") or student_data.get("branch", "")
         specialization = student_data.get("Specialization") or student_data.get("specialization", "")
 
-        if programme_type == "pg" and specialization:
-            if "design" in discipline_name.lower():
-                batch_name = "M.Des"
-            elif specialization == "Mechatronics":
-                batch_name = "M.Tech"
-            else:
-                batch_name = f"M.Tech {specialization}"
-        else:
-            batch_name = batch_name_from_discipline(discipline_name, programme_type)
+        batch_name = batch_name_for(discipline_name, specialization, programme_type)
 
         discipline_obj = get_or_create_discipline(discipline_name)
         batch_obj = Batch.objects.filter(name=batch_name, discipline=discipline_obj, year=batch_year, running_batch=True).first()
@@ -711,6 +739,7 @@ def save_students(data):
 
         try:
             with transaction.atomic():
+                reserve_seat(batch_obj)
                 StudentBatchUpload.objects.create(
                     jee_app_no=student_data.get("JEE App. No./CCMT Roll. No.") or student_data.get("jee_app_no") or student_data.get("jeeAppNo") or None,
                     roll_number=student_data.get("Institute Roll Number") or student_data.get("rollNumber") or None,
@@ -755,6 +784,14 @@ def save_students(data):
                     source="excel_upload",
                 )
                 successful += 1
+        except ServiceError as exc:
+            failed += 1
+            errors.append({
+                "student": name,
+                "roll_number": student_data.get("Institute Roll Number", ""),
+                "error": exc.payload["message"],
+                "validation_error": exc.payload.get("validation_error"),
+            })
         except Exception as exc:
             failed += 1
             errors.append(f"Failed to save student {name}: {exc}")
@@ -830,7 +867,16 @@ def add_student(raw):
         raise ServiceError({"success": False, "message": "Failed to process student data"})
     student_data = processed[0]
 
+    discipline_name = student_data.get("branch") or ""
+    discipline_obj = find_discipline(discipline_name)
+    batch_obj = None
+    if discipline_obj:
+        batch_name = batch_name_for(discipline_name, data.get("specialization", ""), programme_type)
+        batch_obj = Batch.objects.filter(name=batch_name, discipline=discipline_obj, year=batch_year, running_batch=True).first()
+
     with transaction.atomic():
+        if batch_obj:
+            reserve_seat(batch_obj)
         student = StudentBatchUpload.objects.create(
             name=student_data.get("name"),
             jee_app_no=student_data.get("jee_app_no") or None,
