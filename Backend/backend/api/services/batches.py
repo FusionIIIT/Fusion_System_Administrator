@@ -416,6 +416,9 @@ def update_student(student_id, data):
         if field in DIRECT_STUDENT_FIELDS or field in INT_STUDENT_FIELDS or field in FLOAT_STUDENT_FIELDS or field == "date_of_birth":
             resolved[field] = value
 
+    if "reported_status" in resolved:
+        validate_reported_status(resolved["reported_status"])
+
     for column, label in (("jee_app_no", "JEE Application Number"), ("roll_number", "Roll Number"), ("institute_email", "Institute Email")):
         val = resolved.get(column)
         if val and val != getattr(student, column) and StudentBatchUpload.objects.filter(**{column: val}).exclude(id=student_id).exists():
@@ -459,10 +462,14 @@ def delete_student(student_id):
     return {"success": True, "message": f"Student {name} deleted successfully."}
 
 
-def update_student_status(student_id, status):
+def validate_reported_status(status):
     valid = {choice[0] for choice in StudentBatchUpload.REPORTED_STATUS_CHOICES}
     if status not in valid:
         raise ServiceError({"success": False, "message": f"Invalid status. Allowed: {', '.join(sorted(valid))}"})
+
+
+def update_student_status(student_id, status):
+    validate_reported_status(status)
     student = StudentBatchUpload.objects.filter(id=student_id).first()
     if not student:
         raise ServiceError({"success": False, "message": "Student not found"}, status=404)
@@ -650,7 +657,7 @@ def save_students(data):
     if not students:
         raise ServiceError({"success": False, "message": "No student data provided"})
 
-    skip_duplicates = data.get("skip_duplicates", False)
+    skip_duplicates = data.get("skip_duplicates", True)
     duplicate_fields = data.get("duplicate_check_fields", ["jeeAppNo", "rollNumber", "instituteEmail"])
 
     successful = failed = skipped_duplicates = skipped_invalid = validation_errors = 0
@@ -659,9 +666,10 @@ def save_students(data):
     if skip_duplicates:
         kept = []
         for student in students:
-            duplicate, _ = is_duplicate(student, duplicate_fields)
+            duplicate, reason = is_duplicate(student, duplicate_fields)
             if duplicate:
                 skipped_duplicates += 1
+                errors.append(f"Skipped {student.get('Name') or student.get('name', 'Unknown')}: {reason}")
             else:
                 kept.append(student)
         students = kept
