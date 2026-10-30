@@ -21,6 +21,12 @@ import axiosInstance from "../../context/axiosInstance";
 import { FaCheck, FaTimes } from 'react-icons/fa';
 import PageHeader from "../../components/PageHeader/PageHeader";
 
+const getErrorMessage = (err, fallback) => {
+  if (!err.response) return "Could not reach the server. Please try again.";
+  const { data } = err.response;
+  return data?.error || data?.detail || fallback;
+};
+
 const EditUserRolePage = () => {
   const [username, setUsername] = useState("");
   const [userDetails, setUserDetails] = useState(null);
@@ -33,29 +39,33 @@ const EditUserRolePage = () => {
   const xIcon = <FaTimes style={{ width: rem(20), height: rem(20) }} />;
   const checkIcon = <FaCheck style={{ width: rem(20), height: rem(20) }} />;
 
-  const fetchUserAndRoleDetails = async () => {
+  const fetchUserAndRoleDetails = async (target = username) => {
     try {
       setLoading(true);
       const response = await axiosInstance.get(
-        `/get-user-roles-by-username/?username=${username}`
+        `/get-user-roles-by-username/?username=${target}`
       );
       setUserDetails(response.data.user);
       setCurrentRoles(response.data.roles);
       setLoading(false);
-    } catch {
+    } catch (err) {
       setLoading(false);
       notifications.show({
         title: "Error",
         icon: xIcon,
         position: "top-center",
         withCloseButton: true,
-        message: "Could not fetch user details. Please check the username.",
+        message: getErrorMessage(
+          err,
+          "Could not fetch user details. Please check the username."
+        ),
         color: "red",
       });
     }
   };
 
   const handleSubmit = async () => {
+    const target = userDetails.username;
     try {
       const updatedRoles = [...currentRoles, ...newRoles].filter(
         (role, index, self) => self.indexOf(role) === index
@@ -63,7 +73,7 @@ const EditUserRolePage = () => {
       console.log(updatedRoles);
 
       await axiosInstance.put(`/update-user-roles/`, {
-        username: username,
+        username: target,
         roles: updatedRoles,
       });
 
@@ -76,16 +86,16 @@ const EditUserRolePage = () => {
         color: "green",
       });
       setCurrentRoles(updatedRoles);
-      fetchUserAndRoleDetails();
+      fetchUserAndRoleDetails(target);
       setNewRoles([]);
       setIsOpen(false);
-    } catch {
+    } catch (err) {
       notifications.show({
         title: "Error",
         position: "top-center",
         icon: xIcon,
         withCloseButton: true,
-        message: "Could not update user roles.",
+        message: getErrorMessage(err, "Could not update user roles."),
         color: "red",
       });
     }
@@ -108,20 +118,6 @@ const EditUserRolePage = () => {
     fetchAvailableRoles();
   }, []);
 
-  const handleEnterKeyPress = (event) => {
-    if (event.key === "Enter") {
-      fetchUserAndRoleDetails();
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleEnterKeyPress);
-    return () => {
-      document.removeEventListener("keydown", handleEnterKeyPress);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username]);
-
   return (
     <Container size="lg">
       <PageHeader
@@ -139,10 +135,13 @@ const EditUserRolePage = () => {
                 placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") fetchUserAndRoleDetails();
+                }}
                 required
                 size="md"
               />
-              <Button onClick={fetchUserAndRoleDetails}>Fetch User Details</Button>
+              <Button onClick={() => fetchUserAndRoleDetails()}>Fetch User Details</Button>
             </Stack>
 
             {userDetails && (
