@@ -31,6 +31,7 @@ import UpcomingBatchesPage from "./pages/UpcomingBatches/UpcomingBatchesPage.jsx
 import BackupPage from "./pages/BackupPage/BackupPage.jsx";
 import SchedulePage from "./pages/BackupPage/SchedulePage/SchedulePage.jsx";
 import LoginPage from "./pages/Login/LoginPage.jsx";
+import { ArchiveRequestsPage, RestoreRequestsPage, ApprovalQueuePage, StorageRequestsPage, SecurityAuditPage } from "./pages/BADMS/BADMSPages.jsx";
 import { Notifications } from "@mantine/notifications";
 
 function Layout() {
@@ -51,6 +52,11 @@ function Layout() {
         <Route path="/archive/faculty" element={<ArchiveFacultyPage />} />
         <Route path="/backups" element={<BackupPage />} />
         <Route path="/backups/schedules" element={<SchedulePage />} />
+        <Route path="/badms/archive-requests" element={<ArchiveRequestsPage />} />
+        <Route path="/badms/restore-requests" element={<RestoreRequestsPage />} />
+        <Route path="/badms/approvals" element={<ApprovalQueuePage />} />
+        <Route path="/badms/storage" element={<StorageRequestsPage />} />
+        <Route path="/badms/security-audit" element={<SecurityAuditPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </AppLayout>

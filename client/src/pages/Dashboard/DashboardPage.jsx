@@ -1,6 +1,6 @@
 import { Card, Container, Group, SimpleGrid, Text, ThemeIcon, UnstyledButton } from "@mantine/core";
 import { useNavigate } from "react-router-dom";
-import { FaArchive, FaBook, FaClone, FaHdd, FaLayerGroup, FaUserAlt } from "react-icons/fa";
+import { FaArchive, FaBook, FaClone, FaHdd, FaLayerGroup, FaUserAlt, FaClipboardCheck, FaShieldAlt } from "react-icons/fa";
 import PageHeader from "../../components/PageHeader/PageHeader";
 
 const CARDS = [
@@ -10,6 +10,9 @@ const CARDS = [
   { label: "Role Management", desc: "Create roles and manage module access.", icon: FaClone, to: "/RoleManagement/ManageRoleAccess", color: "grape" },
   { label: "Archive Management", desc: "Archive students and faculty records.", icon: FaArchive, to: "/archive/students", color: "orange" },
   { label: "Backup Management", desc: "Backups, restores and schedules.", icon: FaHdd, to: "/backups", color: "red" },
+  { label: "BADMS Requests", desc: "Submit archival and restoration requests.", icon: FaArchive, to: "/badms/archive-requests", color: "orange" },
+  { label: "Approvals & Audit", desc: "Review requests and security activity.", icon: FaClipboardCheck, to: "/badms/approvals", color: "grape" },
+  { label: "Security & Encryption", desc: "Review encryption posture and audit logs.", icon: FaShieldAlt, to: "/badms/security-audit", color: "teal" },
 ];
 
 const DashboardPage = () => {

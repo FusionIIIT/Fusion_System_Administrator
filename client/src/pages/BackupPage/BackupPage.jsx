@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Container,
@@ -39,7 +40,6 @@ import {
   fetchBackups,
   createBackup,
   deleteBackup as apiDeleteBackup,
-  restoreBackup as apiRestoreBackup,
   getBackupStatus,
   fetchRestores,
   getRestoreStatus,
@@ -186,6 +186,7 @@ const BackupHeatmap = ({ backups }) => {
 // ── main page ──────────────────────────────────────────────────────────────────
 
 const BackupPage = () => {
+  const navigate = useNavigate();
   const [databases, setDatabases] = useState([]);
   const [selectedDb, setSelectedDb] = useState(null);
   const [backups, setBackups] = useState([]);
@@ -197,7 +198,6 @@ const BackupPage = () => {
   const [deleteModal, setDeleteModal] = useState({ open: false, id: null });
   const [restoreModal, setRestoreModal] = useState({ open: false, id: null });
   const [deleting, setDeleting] = useState(false);
-  const [restoring, setRestoring] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -472,43 +472,12 @@ const BackupPage = () => {
     });
   };
 
-  const handleRestore = async () => {
-    setRestoring(true);
-    try {
-      const result = await apiRestoreBackup(restoreModal.id);
-      // add the new in_progress restore record to state immediately
-      setRestores((prev) => [
-        {
-          id: result.restore_id,
-          db_name: result.db_name,
-          source_backup_id: result.backup_id,
-          source_backup_created_at: result.source_backup_created_at,
-          started_at: result.started_at,
-          finished_at: null,
-          status: "in_progress",
-          duration_ms: 0,
-          error_message: "",
-        },
-        ...prev,
-      ]);
-      showNotification({
-        title: "Restore initiated",
-        message:
-          "Database restore is in progress. You'll be notified when done.",
-        color: "blue",
-        position: "top-center",
-      });
-    } catch (err) {
-      showNotification({
-        title: "Error",
-        message: err.response?.data?.error || "Failed to start restore.",
-        color: "red",
-        position: "top-center",
-      });
-    } finally {
-      setRestoring(false);
-      setRestoreModal({ open: false, id: null });
-    }
+  const handleRestore = () => {
+    // BADMS requires approval before any restore is executed. Do not call the
+    // direct restore endpoint from this screen; create an approval request.
+    const backupId = restoreModal.id;
+    setRestoreModal({ open: false, id: null });
+    navigate("/badms/restore-requests", { state: { backupId } });
   };
 
   // ── render ───────────────────────────────────────────────────────────────────
@@ -1012,22 +981,22 @@ const BackupPage = () => {
         radius="md"
       >
         <Text size="sm" mb="md">
-          Restoring from this backup will overwrite the current database state.
+          This will take you to the BADMS restoration request form. The restore
+          will not execute until the required approvals have been completed.
         </Text>
-        <Text size="sm" fw={600} color="red" mb="xl">
-          This is a destructive operation and cannot be undone. All data written
-          after this backup was created will be lost.
+        <Text size="sm" fw={600} color="orange" mb="xl">
+          Do not restore directly from this screen. The approval workflow must
+          be completed before the database is changed.
         </Text>
         <Flex justify="space-between">
           <Button
             variant="default"
             onClick={() => setRestoreModal({ open: false, id: null })}
-            disabled={restoring}
           >
             Cancel
           </Button>
-          <Button color="green" onClick={handleRestore} loading={restoring}>
-            Restore
+          <Button color="blue" onClick={handleRestore}>
+            Continue to request
           </Button>
         </Flex>
       </Modal>
