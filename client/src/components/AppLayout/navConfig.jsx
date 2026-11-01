@@ -14,6 +14,9 @@ import {
   FaHdd,
   FaClock,
   FaTrashAlt,
+  FaClipboardCheck,
+  FaShieldAlt,
+  FaRedo,
 } from "react-icons/fa";
 
 export const NAV_GROUPS = [
@@ -69,6 +72,17 @@ export const NAV_GROUPS = [
         links: [
           { label: "Backups", icon: FaHdd, to: "/backups" },
           { label: "Schedules", icon: FaClock, to: "/backups/schedules" },
+          { label: "Restore Requests", icon: FaRedo, to: "/badms/restore-requests" },
+        ],
+      },
+      {
+        label: "BADMS Workflows",
+        icon: FaClipboardCheck,
+        links: [
+          { label: "Archive Requests", icon: FaArchive, to: "/badms/archive-requests" },
+          { label: "Approval Queue", icon: FaClipboardCheck, to: "/badms/approvals" },
+          { label: "Storage Extension", icon: FaHdd, to: "/badms/storage" },
+          { label: "Security & Audit", icon: FaShieldAlt, to: "/badms/security-audit" },
         ],
       },
     ],
