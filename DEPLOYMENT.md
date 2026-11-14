@@ -139,6 +139,7 @@ EMAIL_TEST_USER=...
 # Optional
 # TOKEN_TTL_HOURS=12
 # REDIS_URL=redis://127.0.0.1:6379/0     # shared login-throttle across gunicorn workers
+# IAM_TRUSTED_PROXIES=127.0.0.1,::1      # who may set X-Forwarded-For; add nginx if it is on another host
 # BACKUP_ENCRYPTION_KEY=<Fernet key>     # encrypt backup dumps at rest
 ```
 `DEBUG=False` auto-enables `Secure` cookies + HTTPS security headers. The SPA and API are

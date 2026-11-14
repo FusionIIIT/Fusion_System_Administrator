@@ -80,7 +80,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.ScopedRateThrottle",
+        "iam.network.ClientAddressThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "login": "5/min",
@@ -126,6 +126,10 @@ if REDIS_URL:
             "LOCATION": REDIS_URL,
         }
     }
+
+# Who may say which client it forwards for (see iam/network.py). nginx and the
+# Fusion services reach the IAM over loopback; add nginx's address if it moves.
+IAM_TRUSTED_PROXIES = env.list("IAM_TRUSTED_PROXIES", default=["127.0.0.1", "::1"])
 
 # Production security headers — only enforced when DEBUG is off, so local dev over
 # plain HTTP is unaffected.

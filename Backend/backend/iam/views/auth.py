@@ -2,20 +2,15 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from iam.authentication import COOKIE_NAME, IamTokenAuthentication
 from iam import services
 from iam.models import IamUser
+from iam.network import ClientAddressThrottle, client_address
 from iam.services import Locked, authenticate, build_session
 
 TOKEN_TTL_HOURS = 12
-
-
-def _client_ip(request):
-    fwd = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    return fwd.split(",")[0].strip() if fwd else request.META.get("REMOTE_ADDR")
 
 
 class LoginView(APIView):
@@ -27,7 +22,7 @@ class LoginView(APIView):
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ClientAddressThrottle]
     throttle_scope = "login"
 
     def post(self, request):
@@ -37,7 +32,7 @@ class LoginView(APIView):
             return Response({"detail": "Username and password are required."},
                             status=status.HTTP_400_BAD_REQUEST)
         try:
-            token = authenticate(username, password, ip=_client_ip(request))
+            token = authenticate(username, password, ip=client_address(request))
         except Locked as exc:
             msg = f"Too many failed attempts. Try again in {exc.minutes} minute(s)."
             return Response({"detail": msg}, status=status.HTTP_429_TOO_MANY_REQUESTS)
