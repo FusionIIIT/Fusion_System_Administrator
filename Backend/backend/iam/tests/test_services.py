@@ -97,6 +97,42 @@ class AuthenticationTests(TestCase):
         LoginAttempt.objects.update(at=timezone.now() - timedelta(hours=2))
         services.check_lockout("alice")       # does not raise
 
+    def _attempt(self, outcome, minutes_ago, username="alice"):
+        row = LoginAttempt.objects.create(username=username, outcome=outcome)
+        LoginAttempt.objects.filter(pk=row.pk).update(
+            at=timezone.now() - timedelta(minutes=minutes_ago))
+
+    def test_a_success_clears_the_failures_before_it(self):
+        for _ in range(4):
+            self._attempt("bad_password", minutes_ago=20)
+        self._attempt("success", minutes_ago=10)
+        for _ in range(4):
+            self._attempt("bad_password", minutes_ago=0)
+        services.check_lockout("alice")       # four since the success, not eight
+
+    def test_failures_after_a_success_still_lock(self):
+        self._attempt("success", minutes_ago=10)
+        for _ in range(5):
+            self._attempt("bad_password", minutes_ago=0)
+        with self.assertRaises(services.Locked) as ctx:
+            services.check_lockout("alice")
+        self.assertEqual(ctx.exception.minutes, 1)
+
+    def test_someone_elses_success_clears_nothing(self):
+        for _ in range(5):
+            self._attempt("bad_password", minutes_ago=0)
+        self._attempt("success", minutes_ago=0, username="bob")
+        with self.assertRaises(services.Locked):
+            services.check_lockout("alice")
+
+    def test_signing_in_between_mistakes_never_adds_up_to_a_lock(self):
+        make_user()
+        for _ in range(2):
+            for _ in range(4):
+                self.assertIsNone(services.authenticate("alice", "wrong"))
+            self.assertIsNotNone(services.authenticate("alice", PASSWORD))
+        self.assertIsNotNone(services.authenticate("alice", PASSWORD))
+
     def test_resolve_token_rejects_expired_and_revoked(self):
         make_user()
         live = IamToken.issue(erp_user_id=1, username="alice")
