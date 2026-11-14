@@ -10,6 +10,7 @@ login, which is correct.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Sequence
 from datetime import timedelta
 
@@ -22,8 +23,10 @@ from iam.models import (IamDesignationModule, IamModule, IamToken, IamUser,
                         IamUserAcademic, IamUserDesignation, LoginAttempt,
                         RolePermission, SyncRun)
 
-# Lockout ladder, counted per username. A success resets it.
-LOCKOUT_TIERS = ((15, None), (10, 30), (8, 5), (5, 1))   # (failures, minutes)
+# Lockout ladder, counted per username. A success, or an operator's unlock, resets it.
+LOCKOUT_TIERS = ((15, 60), (10, 30), (8, 5), (5, 1))   # (failures, minutes)
+# Outcomes that start the count afresh; every other outcome is a failure.
+_RESETS = ("success", "unlocked")
 
 # Hashing a dummy on unknown-user keeps response time from revealing existence.
 _DUMMY_HASH = ("pbkdf2_sha256$260000$dummydummydummy$"
@@ -31,35 +34,51 @@ _DUMMY_HASH = ("pbkdf2_sha256$260000$dummydummydummy$"
 
 
 class Locked(Exception):
-    def __init__(self, minutes: int | None):
-        self.minutes = minutes
+    def __init__(self, minutes: int):
+        self.minutes = minutes                       # left to wait, rounded up
         super().__init__("Account temporarily locked.")
 
 
 # -- authentication ------------------------------------------------------------
-def _recent_failures(username: str, within_minutes: int = 60) -> int:
-    """Failures in the window that came after this username's last success."""
+def login_key(username: str) -> str:
+    """Sign-in matches usernames in any case, so attempts are counted the same way."""
+    return (username or "").strip().lower()
+
+
+def _recent_failures(key: str, within_minutes: int = 60) -> int:
+    """Failures in the window that came after this username's last success or unlock."""
     attempts = LoginAttempt.objects.filter(
-        username=username, at__gte=timezone.now() - timedelta(minutes=within_minutes))
-    last_success = (attempts.filter(outcome="success").order_by("-at")
-                    .values_list("at", flat=True).first())
-    if last_success is not None:
-        attempts = attempts.filter(at__gt=last_success)
-    return attempts.exclude(outcome="success").count()
+        username=key, at__gte=timezone.now() - timedelta(minutes=within_minutes))
+    last_reset = (attempts.filter(outcome__in=_RESETS).order_by("-at")
+                  .values_list("at", flat=True).first())
+    if last_reset is not None:
+        attempts = attempts.filter(at__gt=last_reset)
+    return attempts.exclude(outcome__in=_RESETS).count()
 
 
 def check_lockout(username: str) -> None:
-    fails = _recent_failures(username)
+    key = login_key(username)
+    fails = _recent_failures(key)
     for threshold, minutes in LOCKOUT_TIERS:
         if fails >= threshold:
-            if minutes is None:
-                raise Locked(None)                     # needs an admin unlock
-            last = (LoginAttempt.objects.filter(username=username)
-                    .exclude(outcome="success").order_by("-at").first())
-            if last and timezone.now() < last.at + timedelta(minutes=minutes):
-                raise Locked(minutes)
+            last = (LoginAttempt.objects.filter(username=key)
+                    .exclude(outcome__in=_RESETS).order_by("-at").first())
+            if last is None:
+                return
+            left = last.at + timedelta(minutes=minutes) - timezone.now()
+            if left.total_seconds() > 0:
+                raise Locked(math.ceil(left.total_seconds() / 60))
             return
     return
+
+
+def unlock(username: str) -> int:
+    """Let a locked person sign in now; returns the failures cleared. Recorded, so audited."""
+    key = login_key(username)
+    cleared = _recent_failures(key)
+    if cleared:
+        LoginAttempt.objects.create(username=key, outcome="unlocked")
+    return cleared
 
 
 def _verify(user: IamUser, password: str) -> bool:
@@ -85,25 +104,24 @@ def authenticate(username: str, password: str, *, ip: str | None = None):
     be able to distinguish them, or this becomes an enumeration oracle.
     """
     check_lockout(username)
+    key = login_key(username)
 
     user = IamUser.objects.filter(username__iexact=username).first()
     if user is None:
         check_password(password, _DUMMY_HASH)       # equalise response time
-        LoginAttempt.objects.create(username=username, ip=ip,
-                                    outcome="unknown_user")
+        LoginAttempt.objects.create(username=key, ip=ip, outcome="unknown_user")
         return None
 
     if not user.is_active:
         check_password(password, _DUMMY_HASH)       # equalise response time
-        LoginAttempt.objects.create(username=username, ip=ip, outcome="inactive")
+        LoginAttempt.objects.create(username=key, ip=ip, outcome="inactive")
         return None
 
     if not _verify(user, password):
-        LoginAttempt.objects.create(username=username, ip=ip,
-                                    outcome="bad_password")
+        LoginAttempt.objects.create(username=key, ip=ip, outcome="bad_password")
         return None
 
-    LoginAttempt.objects.create(username=username, ip=ip, outcome="success")
+    LoginAttempt.objects.create(username=key, ip=ip, outcome="success")
     _refresh_roles_if_stale(user)
     return IamToken.issue(erp_user_id=user.erp_user_id, username=user.username)
 
