@@ -38,10 +38,14 @@ class Locked(Exception):
 
 # -- authentication ------------------------------------------------------------
 def _recent_failures(username: str, within_minutes: int = 60) -> int:
-    since = timezone.now() - timedelta(minutes=within_minutes)
-    return (LoginAttempt.objects
-            .filter(username=username, at__gte=since)
-            .exclude(outcome="success").count())
+    """Failures in the window that came after this username's last success."""
+    attempts = LoginAttempt.objects.filter(
+        username=username, at__gte=timezone.now() - timedelta(minutes=within_minutes))
+    last_success = (attempts.filter(outcome="success").order_by("-at")
+                    .values_list("at", flat=True).first())
+    if last_success is not None:
+        attempts = attempts.filter(at__gt=last_success)
+    return attempts.exclude(outcome="success").count()
 
 
 def check_lockout(username: str) -> None:
