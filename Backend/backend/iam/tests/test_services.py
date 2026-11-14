@@ -4,9 +4,11 @@ The through-line: none of these tests create an ERP table, and none of them
 mock one either. If serving a request needed the ERP, these would fail.
 """
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth.hashers import make_password
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
@@ -84,12 +86,70 @@ class AuthenticationTests(TestCase):
             services.check_lockout("alice")
         self.assertEqual(ctx.exception.minutes, 1)
 
-    def test_lockout_escalates_and_finally_needs_an_admin(self):
+    def test_lockout_tops_out_at_an_hour(self):
         for _ in range(15):
             LoginAttempt.objects.create(username="alice", outcome="bad_password")
         with self.assertRaises(services.Locked) as ctx:
             services.check_lockout("alice")
-        self.assertIsNone(ctx.exception.minutes)
+        self.assertEqual(ctx.exception.minutes, 60)
+
+    def test_the_lock_says_how_long_is_left(self):
+        for _ in range(8):
+            self._attempt("bad_password", minutes_ago=3)
+        with self.assertRaises(services.Locked) as ctx:
+            services.check_lockout("alice")
+        self.assertEqual(ctx.exception.minutes, 2)        # the five-minute tier, three gone
+
+    def test_changing_the_case_of_the_username_does_not_buy_more_guesses(self):
+        make_user()
+        for spelling in ("alice", "Alice", "ALICE", "aLiCe", "ALice"):
+            self.assertIsNone(services.authenticate(spelling, "wrong"))
+        with self.assertRaises(services.Locked):
+            services.authenticate("alice", PASSWORD)
+        self.assertEqual(set(LoginAttempt.objects.values_list("username", flat=True)),
+                         {"alice"})
+
+    def test_an_unlock_lets_a_locked_person_sign_in_now(self):
+        make_user()
+        for _ in range(15):
+            self._attempt("bad_password", minutes_ago=0)
+        self.assertEqual(services.unlock("Alice"), 15)
+        self.assertIsNotNone(services.authenticate("alice", PASSWORD))
+        self.assertTrue(LoginAttempt.objects.filter(username="alice",
+                                                    outcome="unlocked").exists())
+
+    def test_failures_after_an_unlock_count_afresh(self):
+        for _ in range(15):
+            self._attempt("bad_password", minutes_ago=5)
+        services.unlock("alice")
+        for _ in range(5):
+            self._attempt("bad_password", minutes_ago=0)
+        with self.assertRaises(services.Locked) as ctx:
+            services.check_lockout("alice")
+        self.assertEqual(ctx.exception.minutes, 1)
+
+    def test_unlocking_one_person_leaves_another_locked(self):
+        for name in ("alice", "bob"):
+            for _ in range(5):
+                self._attempt("bad_password", minutes_ago=0, username=name)
+        services.unlock("bob")
+        services.check_lockout("bob")
+        with self.assertRaises(services.Locked):
+            services.check_lockout("alice")
+
+    def test_unlocking_someone_with_no_failures_records_nothing(self):
+        self.assertEqual(services.unlock("alice"), 0)
+        self.assertFalse(LoginAttempt.objects.exists())
+
+    def test_the_unlock_command_says_what_it_did(self):
+        for _ in range(5):
+            self._attempt("bad_password", minutes_ago=0)
+        out = StringIO()
+        call_command("unlock_login", "--user", "ALICE", stdout=out)
+        self.assertIn("Cleared 5 recent failed sign-in(s) for alice", out.getvalue())
+        out = StringIO()
+        call_command("unlock_login", "--user", "alice", stdout=out)
+        self.assertIn("nothing to clear", out.getvalue())
 
     def test_old_failures_do_not_count(self):
         for _ in range(15):

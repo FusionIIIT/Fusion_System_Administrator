@@ -39,9 +39,7 @@ class LoginView(APIView):
         try:
             token = authenticate(username, password, ip=_client_ip(request))
         except Locked as exc:
-            msg = ("Too many failed attempts. Contact the office to unlock."
-                   if exc.minutes is None
-                   else f"Too many failed attempts. Try again in {exc.minutes} minute(s).")
+            msg = f"Too many failed attempts. Try again in {exc.minutes} minute(s)."
             return Response({"detail": msg}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         if token is None:
