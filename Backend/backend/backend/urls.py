@@ -22,7 +22,8 @@ from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+
+from iam.network import ClientAddressThrottle
 
 
 def _set_auth_cookie(response, token_key):
@@ -50,7 +51,7 @@ class LoginView(ObtainAuthToken):
     """
 
     authentication_classes = []
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ClientAddressThrottle]
     throttle_scope = "login"
 
     def post(self, request, *args, **kwargs):
