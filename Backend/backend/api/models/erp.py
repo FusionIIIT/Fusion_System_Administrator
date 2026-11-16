@@ -291,11 +291,29 @@ class StudentGrade(models.Model):
         db_table = "online_cms_student_grades"
 
 
+class Semester(models.Model):
+    """programme_curriculum.Semester: one semester of a curriculum."""
+
+    curriculum = models.ForeignKey(Curriculum, on_delete=models.DO_NOTHING)
+    semester_no = models.PositiveIntegerField()
+
+    class Meta:
+        managed = False
+        db_table = "programme_curriculum_semester"
+
+
 class CourseRegistration(models.Model):
+    """academic_procedures.course_registration: what students and every
+    academic screen read as a student's courses for a term."""
+
     course_id = models.ForeignKey(Course, on_delete=models.DO_NOTHING,
                                   db_column="course_id_id")
     student_id = models.ForeignKey(Student, on_delete=models.DO_NOTHING,
                                    db_column="student_id_id")
+    semester = models.ForeignKey(Semester, on_delete=models.DO_NOTHING,
+                                 db_column="semester_id_id", null=True)
+    registration_type = models.CharField(max_length=20, default="Regular")
+    session = models.CharField(max_length=9, null=True)
     semester_type = models.CharField(max_length=20, null=True)
     working_year = models.IntegerField(null=True)
 
@@ -321,6 +339,58 @@ class CourseReplacement(models.Model):
     class Meta:
         managed = False
         db_table = "course_replacement"
+
+
+class FinalRegistration(models.Model):
+    """academic_procedures.FinalRegistration: the allocation's own record of
+    which course each student was allotted, before it is published to
+    course_registration."""
+
+    student_id = models.ForeignKey(Student, on_delete=models.DO_NOTHING,
+                                   db_column="student_id_id")
+    semester_id = models.ForeignKey(Semester, on_delete=models.DO_NOTHING,
+                                    db_column="semester_id_id")
+    course_id = models.ForeignKey(Course, on_delete=models.DO_NOTHING,
+                                  db_column="course_id_id")
+    registration_type = models.CharField(max_length=20, default="Regular")
+    verified = models.BooleanField(default=False)
+    old_course_registration = models.ForeignKey(
+        CourseRegistration, on_delete=models.DO_NOTHING, null=True,
+        db_column="old_course_registration_id", related_name="+")
+
+    class Meta:
+        managed = False
+        db_table = "FinalRegistration"
+
+
+class InitialRegistration(models.Model):
+    """academic_procedures.InitialRegistration: a student's pre-registration
+    choices. Allocation reads it and never changes it."""
+
+    student_id = models.ForeignKey(Student, on_delete=models.DO_NOTHING,
+                                   db_column="student_id_id")
+    semester_id = models.ForeignKey(Semester, on_delete=models.DO_NOTHING,
+                                    db_column="semester_id_id")
+    old_course_registration = models.ForeignKey(
+        CourseRegistration, on_delete=models.DO_NOTHING, null=True,
+        db_column="old_course_registration_id", related_name="+")
+
+    class Meta:
+        managed = False
+        db_table = "InitialRegistration"
+
+
+class CourseAddRequest(models.Model):
+    """academic_procedures.CourseAddRequest, only for its link to an earlier
+    registration."""
+
+    old_course_registration = models.ForeignKey(
+        CourseRegistration, on_delete=models.DO_NOTHING, null=True,
+        db_column="old_course_registration_id", related_name="+")
+
+    class Meta:
+        managed = False
+        db_table = "academic_procedures_courseaddrequest"
 
 
 class ResultAnnouncement(models.Model):

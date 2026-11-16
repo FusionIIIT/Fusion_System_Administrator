@@ -27,6 +27,7 @@ import ManageRoleAccessPage from "./pages/RoleManagementPages/ManageRoleAccessPa
 
 import UserDirectory from "./pages/UserDirectory/UserDirectory.jsx";
 import UpcomingBatchesPage from "./pages/UpcomingBatches/UpcomingBatchesPage.jsx";
+import DeleteAllocationPage from "./pages/AllocationPages/DeleteAllocationPage.jsx";
 
 import BackupPage from "./pages/BackupPage/BackupPage.jsx";
 import SchedulePage from "./pages/BackupPage/SchedulePage/SchedulePage.jsx";
@@ -40,6 +41,7 @@ function Layout() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/UserDirectory" element={<UserDirectory />} />
         <Route path="/UpcomingBatches" element={<UpcomingBatchesPage />} />
+        <Route path="/allocations/delete" element={<DeleteAllocationPage />} />
         <Route path="/UserManagement/CreateFaculty" element={<FacultyCreationPage />} />
         <Route path="/UserManagement/CreateStaff" element={<StaffCreationPage />} />
         <Route path="/UserManagement/DeleteUser" element={<DeleteUserPage />} />

@@ -1,3 +1,4 @@
+from .allocations import urlpatterns as allocation_urls
 from .archive import urlpatterns as archive_urls
 from .backups import urlpatterns as backup_urls
 from .batches import urlpatterns as batch_urls
@@ -14,4 +15,5 @@ urlpatterns = (
     + backup_urls
     + batch_urls
     + archive_urls
+    + allocation_urls
 )

@@ -26,6 +26,7 @@ export const NAV_GROUPS = [
     items: [
       { label: "User Directory", icon: FaBook, to: "/UserDirectory" },
       { label: "Upcoming Batches", icon: FaLayerGroup, to: "/UpcomingBatches" },
+      { label: "Delete Allocation", icon: FaTrashAlt, to: "/allocations/delete" },
     ],
   },
   {
