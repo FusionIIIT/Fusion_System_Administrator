@@ -269,7 +269,7 @@ class Course(models.Model):
 
 
 class StudentGrade(models.Model):
-    """online_cms.Student_grades — one row per course per student per attempt.
+    """examination.Student_grades — one row per course per student per attempt.
 
     `roll_no` is a TEXT column holding globals_extrainfo.id (the roll number),
     NOT auth_user.id. That mismatch is the reason this module exists: joining
@@ -288,7 +288,7 @@ class StudentGrade(models.Model):
 
     class Meta:
         managed = False
-        db_table = "online_cms_student_grades"
+        db_table = "examination_student_grades"
 
 
 class Semester(models.Model):
