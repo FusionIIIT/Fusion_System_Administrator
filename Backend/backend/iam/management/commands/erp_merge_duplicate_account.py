@@ -1,4 +1,7 @@
 """Fold a duplicate login into the account the person actually uses."""
+
+from __future__ import annotations
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections, transaction
 

@@ -3,6 +3,7 @@ from io import StringIO
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.test import tag
 
 from api.models.erp import AuthUser, GlobalsExtrainfo, GlobalsHoldsdesignation
 from iam.tests.erp_fixture import ErpFactory, ErpSchemaTestCase
@@ -227,6 +228,9 @@ class SetEmployeeDepartmentTests(ErpSchemaTestCase):
             "erp_set_employee_department", "--report")
 
 
+# The merge command reads Postgres's information_schema.table_constraints, which
+# the SQLite test database doesn't have; run these against Postgres.
+@tag("postgres")
 class MergeDuplicateAccountTests(ErpSchemaTestCase):
     def setUp(self):
         self.erp = ErpFactory(seed=12)
@@ -309,6 +313,7 @@ class MergeDuplicateAccountTests(ErpSchemaTestCase):
             run("erp_merge_duplicate_account", "--pair", "not-a-pair")
 
 
+@tag("postgres")
 class MergeWhenBothHoldTheRoleTests(ErpSchemaTestCase):
     def setUp(self):
         self.erp = ErpFactory(seed=13)

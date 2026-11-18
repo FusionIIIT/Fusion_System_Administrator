@@ -3,6 +3,9 @@
 It used to write the projection alone. Login re-reads a stale projection from
 the ERP and sync_identity rebuilds it, so the grant vanished within half an hour.
 """
+
+from __future__ import annotations
+
 from io import StringIO
 
 from django.core.management import call_command

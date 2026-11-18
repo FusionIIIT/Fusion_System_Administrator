@@ -1,4 +1,7 @@
 """Set the department an employee belongs to."""
+
+from __future__ import annotations
+
 import csv
 from datetime import date
 
