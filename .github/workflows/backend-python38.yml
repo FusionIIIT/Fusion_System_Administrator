@@ -1,0 +1,39 @@
+# The production server runs the backend on Python 3.8 (Ubuntu 22.04). Code that
+# only loads on a newer Python passes everywhere else and then refuses to start
+# there, so the backend is checked on 3.8 here.
+name: Backend on Python 3.8
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: Backend/backend
+    env:
+      SECRET_KEY: ci-only
+      DEBUG: "False"
+      EMAIL_HOST_USER: ci@example.invalid
+      EMAIL_HOST_PASSWORD: ci
+      EMAIL_TEST_USER: ci@example.invalid
+      SECURE_SSL_REDIRECT: "False"
+      DJANGO_SETTINGS_MODULE: backend.test_settings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          cache: pip
+          cache-dependency-path: Backend/requirements.txt
+      - name: Install
+        run: pip install -r ../requirements.txt
+      - name: Every module loads
+        run: python ../ops/check_imports.py
+      - name: Django checks
+        run: python manage.py check
+      - name: Tests (SQLite; Postgres-only tests are tagged and skipped)
+        run: python manage.py test --noinput --exclude-tag=postgres

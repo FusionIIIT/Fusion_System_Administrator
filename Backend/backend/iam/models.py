@@ -7,6 +7,9 @@ users in a different database entirely, so their sessions cannot FK to anything.
 `erp_user_id` is therefore a plain integer, matching how Fusion-Integrated
 references people.
 """
+
+from __future__ import annotations
+
 import binascii
 import hashlib
 import os

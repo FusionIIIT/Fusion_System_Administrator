@@ -6,6 +6,9 @@ Derived, never authored: the registry that draws the sidebar also routes the
 traffic, so the two cannot disagree. A module moving between apps changes its
 `app` and nothing else — the path belongs to the module, so bookmarks survive.
 """
+
+from __future__ import annotations
+
 from django.core.management.base import BaseCommand, CommandError
 
 from iam.models import IamModule

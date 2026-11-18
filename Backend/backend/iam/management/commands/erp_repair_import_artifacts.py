@@ -1,4 +1,7 @@
 """Deactivate auth_user rows that are import wreckage, not people."""
+
+from __future__ import annotations
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 

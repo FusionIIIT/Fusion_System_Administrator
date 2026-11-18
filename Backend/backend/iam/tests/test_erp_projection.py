@@ -1,4 +1,7 @@
 """The ERP-facing half of this service, tested for the first time."""
+
+from __future__ import annotations
+
 from iam.erp_source import iter_users
 from iam.models import IamUser
 from iam.services import employee_page

@@ -27,6 +27,9 @@ Databases (Postgres):
 ```
 
 - Repo checkout: `~/Fusion_System_Administrator`  ·  venv: `~/Fusion_System_Administrator/venv`
+- The venv is **Python 3.8**. The backend must load on 3.8: no `list[int]`-style or `A | B` types
+  outside annotations, and `from __future__ import annotations` wherever annotations use them.
+  CI (`.github/workflows/backend-python38.yml`) checks every pull request on 3.8.
 - Single root `.env` at `~/Fusion_System_Administrator/.env` (git-ignored — never edit tracked source on the server).
 - Prod tracks the **`theDRB123/Fusion_System_Administrator`** remote via `git pull origin main`.
 
@@ -55,6 +58,9 @@ git pull origin main
 source venv/bin/activate
 cd Backend/backend
 python manage.py check                 # expect "0 issues"
+python ../ops/check_imports.py         # every module loads on the server's Python
+#   If either fails, STOP: do not restart. The running service keeps the old code
+#   until a restart, and a restart onto code that does not load takes it down.
 #   NO ERP migrations: the batch/ERP models are managed=False over existing tables.
 #   If the tool's OWN tables changed: python manage.py migrate --database=system_db
 sudo systemctl restart fusion-sysadmin

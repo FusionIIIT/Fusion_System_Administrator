@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import ipaddress
 from functools import lru_cache
+from typing import Union
 
 from django.conf import settings
 from rest_framework.throttling import ScopedRateThrottle
 
-Address = ipaddress.IPv4Address | ipaddress.IPv6Address
+# typing.Union, not "A | B": this line runs when the module loads, and the server is on Python 3.8.
+Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 
 @lru_cache(maxsize=8)

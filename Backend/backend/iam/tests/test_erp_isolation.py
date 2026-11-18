@@ -5,6 +5,9 @@ graph rather than of any one function, so it is checked statically — nobody
 should be expected to notice a new helper in views/ pulling in an ERP model
 three call frames down.
 """
+
+from __future__ import annotations
+
 import ast
 import pathlib
 
