@@ -1,6 +1,7 @@
 import csv
 import datetime
 import logging
+from django.db import transaction
 from django.http import HttpResponse
 from django.db.models import Max, Q
 from django.db.models.functions import Upper
@@ -258,6 +259,64 @@ def add_individual_faculty(request):
         "globals_faculty_data": faculty_data,
     }, status=status.HTTP_201_CREATED)
 
+EXPECTED_COLUMNS = 14  # username ... department, see the header list in bulk_import_users
+
+
+class RowImportError(Exception):
+    """A CSV row cannot be imported. The message is shown to the admin."""
+
+
+def _import_student_row(row):
+    """Create the four records for one CSV row, or none of them.
+
+    Returns the serialized login account. Raises RowImportError with a reason
+    the admin can act on. Any other exception also rolls the row back.
+    """
+    if len(row) < EXPECTED_COLUMNS:
+        raise RowImportError(f"expected {EXPECTED_COLUMNS} columns, found {len(row)}")
+    department_name = row[13] if row[13] else 'CSE'
+    if not GlobalsDepartmentinfo.objects.filter(name=department_name).exists():
+        raise RowImportError(f"unknown department '{department_name}'")
+    if not row[3]:
+        raise RowImportError("sex is empty")
+    if row[7] and not row[7].isdigit():
+        raise RowImportError("batch must be a year")
+
+    with transaction.atomic(using="default"):
+        user_serializer = AuthUserSerializer(data={
+            'password': make_password(generate_random_password()),
+            'username': row[0].upper(),
+            'first_name': row[1].lower().capitalize() if len(row[1]) > 0 else 'NA',
+            'last_name': row[2].lower().capitalize() if len(row[2]) > 0 else 'NA',
+            'email': f"{row[0].lower()}@iiitdmj.ac.in",
+            'is_staff': False,
+            'is_superuser': False,
+            'is_active': True,
+            'date_joined': datetime.datetime.now().strftime("%Y-%m-%d"),
+        })
+        if not user_serializer.is_valid():
+            if 'username' in user_serializer.errors:
+                raise RowImportError("username already exists or is invalid")
+            raise RowImportError("invalid account data")
+        user = user_serializer.save()
+
+        extra_serializer = add_user_extra_info(row, user)
+        if extra_serializer is None:
+            raise RowImportError("invalid profile data")
+        extrainfo = extra_serializer.save()
+
+        role_serializer = add_user_designation_info(user.id)
+        if role_serializer is None:
+            raise RowImportError("invalid role data")
+        role_serializer.save()
+
+        student_serializer = add_student_info(row, extrainfo)
+        if student_serializer is None:
+            raise RowImportError("invalid student data")
+        student_serializer.save()
+    return user_serializer.data
+
+
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def bulk_import_users(request):
@@ -288,47 +347,22 @@ def bulk_import_users(request):
     
     headers = next(csv_data)
     created_users = []
-    failed_users = []
-    
-    for row in csv_data:
-        if len(row) < 9:
-            failed_users.append(row)
-            continue
-        try:
-            user_data = {
-                'password': make_password(generate_random_password()),
-                'username': row[0].upper(),
-                'first_name': row[1].lower().capitalize() if len(row[1]) > 0 else 'NA',
-                'last_name': row[2].lower().capitalize() if len(row[2]) > 0 else 'NA',
-                'email': f"{row[0].lower()}@iiitdmj.ac.in",
-                'is_staff': False,
-                'is_superuser': False,
-                'is_active': True,
-                'date_joined': datetime.datetime.now().strftime("%Y-%m-%d"),
-            }
-            serializer = AuthUserSerializer(data=user_data)
-            user = None
-            if serializer.is_valid():
-                user = serializer.save()
-            extra_info_serializer = add_user_extra_info(row, user)
-            extra_serializer = None
-            if extra_info_serializer:
-                extra_serializer = extra_info_serializer.save()
-            role_serializer = add_user_designation_info(user.id)
-            if role_serializer:
-                role_serializer.save()
-            student_serializer = add_student_info(row, extra_serializer)
-            if student_serializer:
-                student_serializer.save()
-            if user and extra_info_serializer and role_serializer and student_serializer:
-                created_users.append(serializer.data)
-        except Exception as e:
-            logger.exception("Failed to import user from row: %s", row)
-            failed_users.append(row)
+    failed_users = []  # (row, reason) pairs
 
-    if(len(created_users) > 0):
+    for row in csv_data:
+        if not any(cell.strip() for cell in row):
+            continue  # blank line, not a data row
+        try:
+            created_users.append(_import_student_row(row))
+        except RowImportError as exc:
+            failed_users.append((row, str(exc)))
+        except Exception:
+            logger.exception("Failed to import student row for username %s", row[0] if row else "")
+            failed_users.append((row, "unexpected error, see the server log"))
+
+    if len(created_users) > 0:
         mail_to_user(created_users)
-        
+
     response_data = {
         "message": f"{len(created_users)} users created successfully.",
         "created_users": created_users,
@@ -338,10 +372,11 @@ def bulk_import_users(request):
     if failed_users:
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(headers)
+        writer.writerow(list(headers) + ["error"])
 
-        for failed_user in failed_users:
-            writer.writerow(failed_user)
+        for failed_row, reason in failed_users:
+            padded = list(failed_row) + [""] * (len(headers) - len(failed_row))
+            writer.writerow(padded + [reason])
 
         output.seek(0)
         response_data["skipped_users_csv"] = output.getvalue()
