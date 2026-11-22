@@ -256,7 +256,7 @@ const ArchivePanel = ({ type, title, subtitle, columns, filterKeys }) => {
         <Text size="sm">
           {pending?.action === "restore"
             ? "This will reactivate the selected accounts (login re-enabled, status set back to Active)."
-            : pending?.action === "alumni"
+            : pending?.action === "alumni" && type === "student"
               ? "They keep their login but can only view their courses and results. Nothing about them can be changed until restored. This can be undone from the Archived tab."
               : "This will deactivate the selected accounts — they can no longer log in, be promoted, or register for courses. Their records are preserved and this can be undone from the Archived tab."}
         </Text>

@@ -13,7 +13,7 @@ class ArchiveTests(TestCase):
     databases = {"default", "system_db"}
 
     def setUp(self):
-        factory = ErpFactory(seed=3)
+        factory = self.factory = ErpFactory(seed=3)
         ug = Programme.objects.create(category="UG", name="B.Tech", programme_begin_year=2021)
         curriculum = Curriculum.objects.create(programme=ug, name="B.Tech CSE", no_of_semester=8)
         discipline = Discipline.objects.create(name="Computer Science", acronym="CSE")
@@ -52,3 +52,11 @@ class ArchiveTests(TestCase):
         archive.archive_users(["21BCS001"], "student", "alumni", "operator")
         archive.restore_users(["21BCS001"], "student", "operator")
         self.assertEqual(self.state("21BCS001"), ("PRESENT", True))
+
+    def test_faculty_moved_to_alumni_is_still_deactivated(self):
+        # Fusion's read-only lock covers students only; a former faculty
+        # member keeps no access.
+        prof = self.factory.employee(kind="faculty", department="CSE")
+        result = archive.archive_users([prof.username], "faculty", "alumni", "operator")
+        self.assertEqual(self.state(prof.username), ("ALUMNI", False))
+        self.assertEqual(result["message"], "1 faculty(s) moved to alumni and deactivated.")
