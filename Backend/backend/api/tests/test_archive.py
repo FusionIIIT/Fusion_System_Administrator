@@ -60,3 +60,28 @@ class ArchiveTests(TestCase):
         result = archive.archive_users([prof.username], "faculty", "alumni", "operator")
         self.assertEqual(self.state(prof.username), ("ALUMNI", False))
         self.assertEqual(result["message"], "1 faculty(s) moved to alumni and deactivated.")
+
+    # Withdrawn students belong to Fusion's Student Status page.
+
+    def withdraw(self, roll):
+        GlobalsExtrainfo.objects.filter(id=roll).update(user_status="WITHDRAWN")
+
+    def test_withdrawn_are_listed_under_archived(self):
+        self.withdraw("21BCS001")
+        archived = [r["username"] for r in archive.list_people("student", True)["results"]]
+        self.assertEqual(archived, ["21BCS001"])
+
+    def test_mark_alumni_skips_withdrawn(self):
+        self.withdraw("21BCS001")
+        result = archive.archive_users(["21BCS001", "21BCS002"], "student", "alumni", "operator")
+        self.assertEqual((result["processed"], result["skipped"]), (["21BCS002"], ["21BCS001"]))
+        self.assertEqual(self.state("21BCS001"), ("WITHDRAWN", True))
+        self.assertIn("1 student(s) skipped: withdrawn in Fusion.", result["message"])
+        self.assertNotIn("re-admit", result["message"])
+
+    def test_restore_refuses_withdrawn(self):
+        self.withdraw("21BCS001")
+        result = archive.restore_users(["21BCS001"], "student", "operator")
+        self.assertEqual((result["processed"], result["skipped"]), ([], ["21BCS001"]))
+        self.assertEqual(self.state("21BCS001"), ("WITHDRAWN", True))
+        self.assertIn("re-admit them in Fusion", result["message"])

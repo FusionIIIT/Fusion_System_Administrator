@@ -9,7 +9,10 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_STATUS = "PRESENT"
 STATUS_FOR_ACTION = {"archive": "ARCHIVED", "alumni": "ALUMNI"}
-ARCHIVED_STATUSES = {"ARCHIVED", "ALUMNI", "LEFT"}
+ARCHIVED_STATUSES = {"ARCHIVED", "ALUMNI", "LEFT", "WITHDRAWN"}
+# Withdrawn and re-admitted on Fusion's Student Status page, which keeps the
+# history; nothing here overwrites it.
+FUSION_OWNED_STATUSES = {"WITHDRAWN"}
 
 
 class ServiceError(Exception):
@@ -111,13 +114,16 @@ def _apply(usernames, user_type, action, new_status, active, operator):
     if not usernames:
         raise ServiceError({"success": False, "message": "No users selected."})
 
-    done, failed = [], []
+    done, failed, skipped = [], [], []
     with transaction.atomic():
         for uname in usernames:
             user = AuthUser.objects.filter(username__iexact=uname).first()
             extra = GlobalsExtrainfo.objects.filter(user=user).first() if user else None
             if not user or not extra:
                 failed.append(uname)
+                continue
+            if (extra.user_status or "").strip().upper() in FUSION_OWNED_STATUSES:
+                skipped.append(user.username)
                 continue
             previous = extra.user_status
             extra.user_status = new_status
@@ -133,7 +139,16 @@ def _apply(usernames, user_type, action, new_status, active, operator):
                 performed_by=operator or "",
             )
             done.append(user.username)
-    return done, failed
+    return done, failed, skipped
+
+
+def _skipped_note(skipped, restoring=False):
+    if not skipped:
+        return ""
+    if restoring:
+        return (f" {len(skipped)} student(s) skipped: withdrawn; re-admit them in Fusion "
+                "(Student Status) instead.")
+    return f" {len(skipped)} student(s) skipped: withdrawn in Fusion."
 
 
 def archive_users(usernames, user_type, action, operator=""):
@@ -147,7 +162,7 @@ def archive_users(usernames, user_type, action, operator=""):
     # page and refuses any change to their records. That lock covers students
     # only, so faculty moved to alumni, and anyone archived, are deactivated.
     keeps_login = action == "alumni" and user_type == "student"
-    done, failed = _apply(usernames, user_type, action, new_status, active=keeps_login, operator=operator)
+    done, failed, skipped = _apply(usernames, user_type, action, new_status, active=keeps_login, operator=operator)
     if keeps_login:
         outcome = "moved to alumni. They keep their login, read-only."
     elif action == "alumni":
@@ -158,7 +173,9 @@ def archive_users(usernames, user_type, action, operator=""):
         "success": True,
         "processed": done,
         "failed": failed,
-        "message": f"{len(done)} {user_type}(s) {outcome}" + (f" {len(failed)} not found." if failed else ""),
+        "skipped": skipped,
+        "message": f"{len(done)} {user_type}(s) {outcome}" + (f" {len(failed)} not found." if failed else "")
+        + _skipped_note(skipped),
     }
 
 
@@ -166,10 +183,12 @@ def restore_users(usernames, user_type, operator=""):
     if user_type not in ("student", "faculty"):
         raise ServiceError({"success": False, "message": "Invalid user type."})
 
-    done, failed = _apply(usernames, user_type, "restore", ACTIVE_STATUS, active=True, operator=operator)
+    done, failed, skipped = _apply(usernames, user_type, "restore", ACTIVE_STATUS, active=True, operator=operator)
     return {
         "success": True,
         "processed": done,
         "failed": failed,
-        "message": f"{len(done)} {user_type}(s) restored and reactivated." + (f" {len(failed)} not found." if failed else ""),
+        "skipped": skipped,
+        "message": f"{len(done)} {user_type}(s) restored and reactivated." + (f" {len(failed)} not found." if failed else "")
+        + _skipped_note(skipped, restoring=True),
     }
