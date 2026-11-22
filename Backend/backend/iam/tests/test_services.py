@@ -256,6 +256,23 @@ class SessionTests(TestCase):
         token = IamToken.issue(erp_user_id=7, username="asha")
         self.assertIn("student", services.build_session(token)["roles"])
 
+    def test_alumni_and_withdrawn_students_hold_no_role(self):
+        """They keep their login for Fusion's Alumni page, but nothing here:
+        no Placement, not even through a post held while studying."""
+        for status in ("ALUMNI", "WITHDRAWN"):
+            IamUser.objects.filter(pk=7).update(status=status)
+            s = services.build_session(IamToken.issue(erp_user_id=7, username="asha"))
+            self.assertEqual(
+                (s["roles"], s["modules"], s["permissions"], s["navigation"],
+                 s["active_role"]),
+                ([], [], [], [], None), status)
+
+    def test_a_present_student_keeps_the_student_role(self):
+        IamUser.objects.filter(pk=7).update(status="PRESENT")
+        s = services.build_session(IamToken.issue(erp_user_id=7, username="asha"))
+        self.assertEqual(s["roles"], ["student", "placement_coord"])
+        self.assertEqual(s["modules"], ["placement_cell"])
+
     def test_a_deactivated_user_gets_no_session_even_with_a_live_token(self):
         token = IamToken.issue(erp_user_id=7, username="asha")
         IamUser.objects.filter(pk=7).update(is_active=False)

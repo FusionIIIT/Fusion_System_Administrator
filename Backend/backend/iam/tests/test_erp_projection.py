@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from api.models.erp import GlobalsExtrainfo
 from iam.erp_source import iter_users
 from iam.models import IamUser
 from iam.services import employee_page
@@ -59,6 +60,17 @@ class KindProjectionTests(ErpSchemaTestCase):
 
         rows = {r["erp_user_id"]: r for b in iter_users() for r in b}
         assert rows[employee.id]["department"] == ""
+
+    def test_the_student_status_crosses_over(self):
+        """Alumni and withdrawn students keep their ERP login, so the status,
+        not is_active, is what tells IAM they are no longer studying."""
+        student = self.erp.student(roll_no="21BCS001")
+        GlobalsExtrainfo.objects.filter(user_id=student.id).update(user_status=" alumni ")
+        employee = self.erp.employee(kind="staff", department="CSE")
+
+        rows = {r["erp_user_id"]: r for b in iter_users() for r in b}
+        assert rows[student.id]["status"] == "ALUMNI"
+        assert rows[employee.id]["status"] == "PRESENT"
 
     def test_is_active_crosses_over(self):
         gone = self.erp.employee(kind="staff", department="CSE", active=False)

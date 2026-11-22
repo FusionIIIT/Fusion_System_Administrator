@@ -217,6 +217,10 @@ class IamUser(models.Model):
     kind = models.CharField(max_length=20, choices=KINDS, default="unknown",
                             db_index=True)
     is_active = models.BooleanField(default=True)
+    #: extrainfo.user_status, trimmed and upper-cased. Alumni and withdrawn
+    #: students stay active (they keep their Fusion login), so this is what
+    #: says they are no longer studying.
+    status = models.CharField(max_length=20, blank=True, default="")
 
     # Copied so login does not need the ERP. If it goes stale (a reset done in
     # the ERP), authenticate() falls back to a live check and re-syncs — see

@@ -60,6 +60,7 @@ def iter_users(batch_size: int = 500) -> Iterator[list[dict]]:
             "email": u.email or "",
             "kind": _kind(e, u.id in employed),
             "is_active": bool(u.is_active),
+            "status": ((e.user_status if e else "") or "").strip().upper()[:20],
             "password_hash": u.password or "",
             "department": getattr(getattr(e, "department", None), "name", "") or "",
             "programme": (s.programme if s else "") or "",

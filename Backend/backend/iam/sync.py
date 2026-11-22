@@ -20,7 +20,7 @@ from iam.models import (IamRoleViolation, IamUser, IamUserAcademic,
 
 log = logging.getLogger("fusion.iam.sync")
 
-USER_FIELDS = ["username", "display_name", "email", "kind", "is_active",
+USER_FIELDS = ["username", "display_name", "email", "kind", "is_active", "status",
                "password_hash", "department", "programme", "discipline",
                "batch_year", "resume_link", "profile_completed", "synced_at"]
 
