@@ -76,7 +76,8 @@ class ArchiveTests(TestCase):
         result = archive.archive_users(["21BCS001", "21BCS002"], "student", "alumni", "operator")
         self.assertEqual((result["processed"], result["skipped"]), (["21BCS002"], ["21BCS001"]))
         self.assertEqual(self.state("21BCS001"), ("WITHDRAWN", True))
-        self.assertIn("1 withdrawn student(s) skipped", result["message"])
+        self.assertIn("1 student(s) skipped: withdrawn in Fusion.", result["message"])
+        self.assertNotIn("re-admit", result["message"])
 
     def test_restore_refuses_withdrawn(self):
         self.withdraw("21BCS001")

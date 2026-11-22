@@ -142,11 +142,13 @@ def _apply(usernames, user_type, action, new_status, active, operator):
     return done, failed, skipped
 
 
-def _skipped_note(skipped):
+def _skipped_note(skipped, restoring=False):
     if not skipped:
         return ""
-    return (f" {len(skipped)} withdrawn student(s) skipped; re-admit them in Fusion "
-            "(Student Status) first.")
+    if restoring:
+        return (f" {len(skipped)} student(s) skipped: withdrawn; re-admit them in Fusion "
+                "(Student Status) instead.")
+    return f" {len(skipped)} student(s) skipped: withdrawn in Fusion."
 
 
 def archive_users(usernames, user_type, action, operator=""):
@@ -188,5 +190,5 @@ def restore_users(usernames, user_type, operator=""):
         "failed": failed,
         "skipped": skipped,
         "message": f"{len(done)} {user_type}(s) restored and reactivated." + (f" {len(failed)} not found." if failed else "")
-        + _skipped_note(skipped),
+        + _skipped_note(skipped, restoring=True),
     }
