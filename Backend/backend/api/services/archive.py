@@ -143,13 +143,16 @@ def archive_users(usernames, user_type, action, operator=""):
         raise ServiceError({"success": False, "message": "Invalid user type."})
 
     new_status = STATUS_FOR_ACTION[action]
-    done, failed = _apply(usernames, user_type, action, new_status, active=False, operator=operator)
-    verb = "moved to alumni" if action == "alumni" else "archived"
+    # Alumni keep their login: Fusion shows them a read-only Alumni page and
+    # refuses any change to their records. Archiving switches login off.
+    alumni = action == "alumni"
+    done, failed = _apply(usernames, user_type, action, new_status, active=alumni, operator=operator)
+    outcome = "moved to alumni. They keep their login, read-only." if alumni else "archived and deactivated."
     return {
         "success": True,
         "processed": done,
         "failed": failed,
-        "message": f"{len(done)} {user_type}(s) {verb} and deactivated." + (f" {len(failed)} not found." if failed else ""),
+        "message": f"{len(done)} {user_type}(s) {outcome}" + (f" {len(failed)} not found." if failed else ""),
     }
 
 
