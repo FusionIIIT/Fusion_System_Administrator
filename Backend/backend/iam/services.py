@@ -158,6 +158,26 @@ def resolve_token(raw: str) -> IamToken | None:
 
 
 # -- RBAC ----------------------------------------------------------------------
+#: A student who has graduated or withdrawn keeps their login for Fusion's
+#: Alumni page, but holds no role here: no Placement, and no post they held
+#: while studying.
+FORMER_STUDENT_STATUSES = ("ALUMNI", "WITHDRAWN")
+
+
+def roles_of(user: IamUser) -> list[str]:
+    """Every role this person holds: their basic role, then their posts."""
+    if user.kind == "student" and user.status in FORMER_STUDENT_STATUSES:
+        return []
+    # The basic role is held by definition, not assigned. The ERP records it as
+    # extrainfo.user_type and has no designation row for it, so a grant written
+    # against `faculty` would otherwise reach nobody, and the 121 staff who hold
+    # no designation at all would have no role whatsoever.
+    roles = designations_for(user.erp_user_id)
+    if user.kind not in roles:
+        roles = [user.kind, *roles]
+    return roles
+
+
 def designations_for(erp_user_id: int) -> list[str]:
     return sorted(IamUserDesignation.objects
                   .filter(erp_user_id=erp_user_id)
@@ -256,14 +276,7 @@ def build_session(token: IamToken) -> dict:
     if user is None or not user.is_active:
         return {}
 
-    # The basic role is held by definition, not assigned. The ERP records it as
-    # extrainfo.user_type and has no designation row for it, so a grant written
-    # against `faculty` would otherwise reach nobody, and the 121 staff who hold
-    # no designation at all would have no role whatsoever.
-    roles = designations_for(user.erp_user_id)
-    if user.kind not in roles:
-        roles = [user.kind, *roles]
-
+    roles = roles_of(user)
     modules = modules_for(roles)
     permissions = permissions_for(roles)
     payload = {
@@ -276,7 +289,8 @@ def build_session(token: IamToken) -> dict:
         },
         "basic_role": user.kind,
         # Their own choice if it still holds, else an office outranks the basic role.
-        "active_role": (user.last_selected_role
+        "active_role": (None if not roles
+                        else user.last_selected_role
                         if user.last_selected_role in roles
                         else next((r for r in roles if r != user.kind), user.kind)),
         "roles": roles,

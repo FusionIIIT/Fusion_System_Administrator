@@ -85,9 +85,7 @@ class MeView(APIView):
             return Response({"detail": "User no longer exists."},
                             status=status.HTTP_404_NOT_FOUND)
 
-        roles = services.designations_for(user.erp_user_id)
-        if user.kind not in roles:
-            roles = [user.kind, *roles]
+        roles = services.roles_of(user)
         if role and role not in roles:
             # A role they do not hold would vanish on the next read, looking broken.
             return Response({"detail": f"You do not hold the role {role!r}."},
