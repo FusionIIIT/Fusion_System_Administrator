@@ -190,14 +190,13 @@ def batch_name_from_discipline(discipline_name, programme_type):
     return programme_type.upper()
 
 
-def get_or_create_discipline(discipline_name):
+def find_discipline(discipline_name):
     normalized = (discipline_name or "").strip()
+    if not normalized:
+        return None
     lower = normalized.lower()
     canonical = next((v for k, v in DISCIPLINE_ALIASES.items() if k in lower), normalized)
-    discipline = Discipline.objects.filter(name=canonical).first()
-    if discipline:
-        return discipline
-    return Discipline.objects.create(name=canonical, acronym=DISCIPLINE_ACRONYM.get(canonical, canonical[:10]))
+    return Discipline.objects.filter(Q(name__iexact=canonical) | Q(name__iexact=normalized) | Q(acronym__iexact=normalized)).first()
 
 
 def available_curriculums(batch):
@@ -697,7 +696,16 @@ def save_students(data):
         else:
             batch_name = batch_name_from_discipline(discipline_name, programme_type)
 
-        discipline_obj = get_or_create_discipline(discipline_name)
+        discipline_obj = find_discipline(discipline_name)
+        if not discipline_obj:
+            failed += 1
+            errors.append({
+                "student": name,
+                "roll_number": student_data.get("Institute Roll Number", ""),
+                "error": f"Unknown discipline '{discipline_name}' in the Discipline column. Use an existing discipline name or acronym.",
+                "validation_error": "unknown_discipline",
+            })
+            continue
         batch_obj = Batch.objects.filter(name=batch_name, discipline=discipline_obj, year=batch_year, running_batch=True).first()
         if not batch_obj:
             failed += 1
