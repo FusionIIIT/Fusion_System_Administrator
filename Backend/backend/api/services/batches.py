@@ -200,6 +200,62 @@ def get_or_create_discipline(discipline_name):
     return Discipline.objects.create(name=canonical, acronym=DISCIPLINE_ACRONYM.get(canonical, canonical[:10]))
 
 
+def find_discipline(discipline_name):
+    normalized = (discipline_name or "").strip()
+    if not normalized:
+        return None
+    lower = normalized.lower()
+    canonical = next((v for k, v in DISCIPLINE_ALIASES.items() if k in lower), normalized)
+    return Discipline.objects.filter(Q(name__iexact=canonical) | Q(name__iexact=normalized) | Q(acronym__iexact=normalized)).first()
+
+
+def batch_name_for(discipline_name, specialization, programme_type):
+    if programme_type == "pg" and specialization:
+        if "design" in discipline_name.lower():
+            return "M.Des"
+        if specialization == "Mechatronics":
+            return "M.Tech"
+        return f"M.Tech {specialization}"
+    return batch_name_from_discipline(discipline_name, programme_type)
+
+
+def require_student_batch(discipline_name, specialization, programme_type, batch_year):
+    discipline = find_discipline(discipline_name)
+    batch_name = batch_name_for(discipline_name or "", specialization, programme_type)
+    batch = Batch.objects.filter(name=batch_name, discipline=discipline, year=batch_year, running_batch=True).first() if discipline else None
+    if not batch:
+        raise ServiceError({
+            "success": False,
+            "message": f"No active batch exists for {batch_name} with discipline '{discipline_name}' in Year-{batch_year}. Create the batch first.",
+            "validation_error": "missing_batch",
+        })
+    return batch
+
+
+UNIQUE_STUDENT_FIELDS = (
+    ("jee_app_no", "JEE Application Number"),
+    ("roll_number", "Roll Number"),
+    ("institute_email", "Institute Email"),
+)
+
+
+def ensure_unique_student(values, exclude_id=None):
+    for column, label in UNIQUE_STUDENT_FIELDS:
+        value = values.get(column)
+        if not value:
+            continue
+        clash = StudentBatchUpload.objects.filter(**{column: value})
+        if exclude_id is not None:
+            clash = clash.exclude(id=exclude_id)
+        existing = clash.first()
+        if existing:
+            raise ServiceError({
+                "success": False,
+                "message": f"{label} {value} already exists for {existing.name}",
+                "validation_error": "duplicate_student",
+            })
+
+
 def available_curriculums(batch):
     if not batch:
         return []
@@ -416,10 +472,10 @@ def update_student(student_id, data):
         if field in DIRECT_STUDENT_FIELDS or field in INT_STUDENT_FIELDS or field in FLOAT_STUDENT_FIELDS or field == "date_of_birth":
             resolved[field] = value
 
-    for column, label in (("jee_app_no", "JEE Application Number"), ("roll_number", "Roll Number"), ("institute_email", "Institute Email")):
-        val = resolved.get(column)
-        if val and val != getattr(student, column) and StudentBatchUpload.objects.filter(**{column: val}).exclude(id=student_id).exists():
-            raise ServiceError({"success": False, "message": f"{label} {val} already exists for another student"})
+    ensure_unique_student(
+        {column: value for column, value in resolved.items() if column in dict(UNIQUE_STUDENT_FIELDS) and value != getattr(student, column)},
+        exclude_id=student_id,
+    )
 
     for field, value in resolved.items():
         if field == "date_of_birth":
@@ -819,16 +875,17 @@ def add_student(raw):
     if missing:
         raise ServiceError({"success": False, "message": f'Missing required fields: {", ".join(missing)}'})
 
-    jee_app_no = data.get("jee_app_no")
-    if jee_app_no:
-        existing = StudentBatchUpload.objects.filter(jee_app_no=jee_app_no).first()
-        if existing:
-            raise ServiceError({"success": False, "message": f"Student with JEE Application Number {jee_app_no} already exists (Roll Number: {existing.roll_number})"})
-
     processed = allocate([data], programme_type, batch_year)
     if not processed:
         raise ServiceError({"success": False, "message": "Failed to process student data"})
     student_data = processed[0]
+
+    require_student_batch(student_data.get("branch"), data.get("specialization", ""), programme_type, batch_year)
+    ensure_unique_student({
+        "jee_app_no": student_data.get("jee_app_no"),
+        "roll_number": student_data.get("roll_number"),
+        "institute_email": student_data.get("institute_email"),
+    })
 
     with transaction.atomic():
         student = StudentBatchUpload.objects.create(
